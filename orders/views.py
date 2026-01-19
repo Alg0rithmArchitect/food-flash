@@ -24,3 +24,7 @@ def track_order(request):
             {"detail": "Invalid token format."}, 
             status=status.HTTP_400_BAD_REQUEST
         )
+
+def track_order_page(request):
+    from django.shortcuts import render
+    return render(request, 'orders/track_order.html')
