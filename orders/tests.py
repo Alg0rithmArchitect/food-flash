@@ -23,3 +23,34 @@ class CreateOrderTests(APITestCase):
         response = self.client.post(self.url, self.data, format='json')
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
         self.assertEqual(Order.objects.count(), 0)
+
+class UpdateOrderStatusTests(APITestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username='manager', password='password')
+        self.order = Order.objects.create(token_number=202, status='PREPARING')
+        self.url = reverse('update_order_status', args=[self.order.pk])
+
+    def test_update_status_authenticated(self):
+        self.client.force_authenticate(user=self.user)
+        data = {'status': 'READY'}
+        response = self.client.patch(self.url, data, format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['status'], 'READY')
+        self.order.refresh_from_db()
+        self.assertEqual(self.order.status, 'READY')
+
+    def test_update_status_invalid_value(self):
+        self.client.force_authenticate(user=self.user)
+        data = {'status': 'INVALID_STATUS'}
+        response = self.client.patch(self.url, data, format='json')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.order.refresh_from_db()
+        self.assertEqual(self.order.status, 'PREPARING')
+
+    def test_update_status_unauthenticated(self):
+        data = {'status': 'READY'}
+        response = self.client.patch(self.url, data, format='json')
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.order.refresh_from_db()
+        self.assertEqual(self.order.status, 'PREPARING')
+
