@@ -48,3 +48,12 @@ def update_order_status(request, pk):
         serializer.save()
         return Response(serializer.data)
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def call_order(request, pk):
+    order = get_object_or_404(Order, pk=pk)
+    order.is_called = True
+    order.save()
+    serializer = OrderSerializer(order)
+    return Response(serializer.data)

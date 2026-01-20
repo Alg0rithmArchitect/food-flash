@@ -54,3 +54,23 @@ class UpdateOrderStatusTests(APITestCase):
         self.order.refresh_from_db()
         self.assertEqual(self.order.status, 'PREPARING')
 
+
+class CallOrderTests(APITestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username='manager', password='password')
+        self.order = Order.objects.create(token_number=303, status='READY')
+        self.url = reverse('call_order', args=[self.order.pk])
+
+    def test_call_order_authenticated(self):
+        self.client.force_authenticate(user=self.user)
+        response = self.client.post(self.url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response.data['is_called'])
+        self.order.refresh_from_db()
+        self.assertTrue(self.order.is_called)
+
+    def test_call_order_unauthenticated(self):
+        response = self.client.post(self.url)
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.order.refresh_from_db()
+        self.assertFalse(self.order.is_called)
