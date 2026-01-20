@@ -16,3 +16,13 @@ class Order(models.Model):
 
     def __str__(self):
         return f"Order {self.token_number} - {self.status}"
+
+class PushSubscription(models.Model):
+    token_number = models.PositiveIntegerField()
+    endpoint = models.TextField()
+    p256dh = models.TextField()
+    auth = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Subscription for Token {self.token_number}"

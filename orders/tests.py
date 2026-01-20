@@ -2,7 +2,7 @@ from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
 from django.contrib.auth.models import User
-from .models import Order
+from .models import Order, PushSubscription
 
 class CreateOrderTests(APITestCase):
     def setUp(self):
@@ -74,3 +74,30 @@ class CallOrderTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
         self.order.refresh_from_db()
         self.assertFalse(self.order.is_called)
+
+class PushSubscriptionTests(APITestCase):
+    def setUp(self):
+        self.url = reverse('push_subscribe')
+        self.data = {
+            'token_number': 505,
+            'endpoint': 'https://fcm.googleapis.com/fcm/send/eR5...',
+            'keys': {
+                'p256dh': 'BNabc123...',
+                'auth': 'AuthSecret123'
+            }
+        }
+
+    def test_subscribe_valid(self):
+        # No authentication required
+        response = self.client.post(self.url, self.data, format='json')
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(PushSubscription.objects.count(), 1)
+        sub = PushSubscription.objects.get()
+        self.assertEqual(sub.token_number, 505)
+        self.assertEqual(sub.p256dh, 'BNabc123...')
+
+    def test_subscribe_missing_fields(self):
+        data = {'token_number': 505} # Missing keys/endpoint
+        response = self.client.post(self.url, data, format='json')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
