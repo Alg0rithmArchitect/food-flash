@@ -4,7 +4,11 @@ from rest_framework.response import Response
 from rest_framework import status
 from django.shortcuts import get_object_or_404
 from .models import Order, PushSubscription
+from .models import Order, PushSubscription
 from .serializers import OrderSerializer, PushSubscriptionSerializer
+from pywebpush import webpush, WebPushException
+import os
+import json
 
 @api_view(['GET'])
 def track_order(request):
@@ -46,6 +50,41 @@ def update_order_status(request, pk):
     serializer = OrderSerializer(order, data=request.data, partial=True)
     if serializer.is_valid():
         serializer.save()
+        serializer.save()
+        
+        # Send Web Push Notification
+        try:
+            subscriptions = PushSubscription.objects.filter(token_number=order.token_number)
+            payload = json.dumps({
+                "title": "Order Update",
+                "body": f"Your order status is now {order.status}"
+            })
+            
+            vapid_private_key = os.getenv("VAPID_PRIVATE_KEY")
+            vapid_claims = {"sub": f"mailto:{os.getenv('VAPID_ADMIN_EMAIL')}"}
+            
+            # If keys are not set, we skip (or you could log a warning)
+            if vapid_private_key:
+                for sub in subscriptions:
+                    try:
+                        webpush(
+                            subscription_info={
+                                "endpoint": sub.endpoint,
+                                "keys": {
+                                    "p256dh": sub.p256dh,
+                                    "auth": sub.auth
+                                }
+                            },
+                            data=payload,
+                            vapid_private_key=vapid_private_key,
+                            vapid_claims=vapid_claims
+                        )
+                    except WebPushException as e:
+                        # Log error but continue
+                        print(f"Push failed: {e}")
+        except Exception as e:
+             print(f"Notification error: {e}")
+
         return Response(serializer.data)
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 

@@ -3,6 +3,7 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 from django.contrib.auth.models import User
 from .models import Order, PushSubscription
+from unittest.mock import patch
 
 class CreateOrderTests(APITestCase):
     def setUp(self):
@@ -100,4 +101,35 @@ class PushSubscriptionTests(APITestCase):
         data = {'token_number': 505} # Missing keys/endpoint
         response = self.client.post(self.url, data, format='json')
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+class NotificationTests(APITestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username='manager', password='password')
+        self.order = Order.objects.create(token_number=707, status='PREPARING')
+        PushSubscription.objects.create(
+            token_number=707,
+            endpoint='https://example.com/push',
+            p256dh='key',
+            auth='secret'
+        )
+        self.url = reverse('update_order_status', args=[self.order.pk])
+
+    @patch('orders.views.webpush')
+    @patch('os.getenv')
+    def test_send_notification_on_update(self, mock_getenv, mock_webpush):
+        # Setup mocks
+        mock_getenv.side_effect = lambda k: 'mock_key' if k == 'VAPID_PRIVATE_KEY' else 'admin@example.com'
+        
+        self.client.force_authenticate(user=self.user)
+        data = {'status': 'READY'}
+        
+        response = self.client.patch(self.url, data, format='json')
+        
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        # Verify webpush was called
+        self.assertTrue(mock_webpush.called)
+        # Verify payload contains status
+        call_args = mock_webpush.call_args[1]
+        self.assertIn('READY', call_args['data'])
+
 
