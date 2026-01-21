@@ -34,6 +34,10 @@ def track_order_page(request):
     from django.shortcuts import render
     return render(request, 'orders/track_order.html')
 
+def service_worker(request):
+    from django.shortcuts import render
+    return render(request, 'sw.js', content_type='application/javascript')
+
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def create_order(request):
