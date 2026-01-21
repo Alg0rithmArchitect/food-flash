@@ -166,6 +166,38 @@
                                 applicationServerKey: urlBase64ToUint8Array(publicVapidKey)
                             }).then(function (subscription) {
                                 console.log('Push Subscription:', subscription);
+
+                                // Prevent duplicate sending per page load
+                                if (window.subscriptionSent) return;
+
+                                const urlParams = new URLSearchParams(window.location.search);
+                                const token = urlParams.get('token') || document.getElementById('token-input').value;
+
+                                if (token) {
+                                    fetch('/api/orders/push/subscribe/', {
+                                        method: 'POST',
+                                        headers: {
+                                            'Content-Type': 'application/json',
+                                        },
+                                        body: JSON.stringify({
+                                            token_number: token,
+                                            endpoint: subscription.endpoint,
+                                            keys: {
+                                                p256dh: btoa(String.fromCharCode.apply(null, new Uint8Array(subscription.getKey('p256dh')))),
+                                                auth: btoa(String.fromCharCode.apply(null, new Uint8Array(subscription.getKey('auth'))))
+                                            }
+                                        })
+                                    }).then(function (response) {
+                                        if (response.ok) {
+                                            console.log('Subscription sent to backend successfully');
+                                            window.subscriptionSent = true;
+                                        } else {
+                                            console.error('Failed to send subscription to backend');
+                                        }
+                                    }).catch(function (err) {
+                                        console.error('Error sending subscription to backend:', err);
+                                    });
+                                }
                             }).catch(function (err) {
                                 console.error('Subscription failed:', err);
                             });
