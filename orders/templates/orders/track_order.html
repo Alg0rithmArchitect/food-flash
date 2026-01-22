@@ -64,6 +64,68 @@
             display: none;
         }
 
+        /* Chat Styles */
+        #chat-container {
+            margin-top: 2rem;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            overflow: hidden;
+            display: none;
+            /* Hidden until tracking starts */
+            background: #fff;
+        }
+
+        #chat-box {
+            height: 200px;
+            overflow-y: auto;
+            padding: 10px;
+            background: #f9f9f9;
+            border-bottom: 1px solid #eee;
+            text-align: left;
+        }
+
+        .message {
+            margin-bottom: 8px;
+            padding: 5px 10px;
+            border-radius: 15px;
+            max-width: 80%;
+            font-size: 14px;
+        }
+
+        .message.customer {
+            background-color: #007bff;
+            color: white;
+            margin-left: auto;
+            border-bottom-right-radius: 2px;
+        }
+
+        .message.manager {
+            background-color: #e9ecef;
+            color: #333;
+            margin-right: auto;
+            border-bottom-left-radius: 2px;
+        }
+
+        .chat-input-area {
+            display: flex;
+            padding: 10px;
+        }
+
+        .chat-input-area input {
+            flex: 1;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 20px;
+            margin-right: 5px;
+            margin-bottom: 0;
+        }
+
+        .chat-input-area button {
+            width: auto;
+            padding: 8px 15px;
+            border-radius: 20px;
+        }
+
         .success {
             background-color: #d4edda;
             color: #155724;
@@ -85,6 +147,15 @@
         <input type="number" id="token-input" placeholder="Enter Token Number" required>
         <button id="track-btn">Track Order</button>
         <div id="status-container"></div>
+
+        <!-- Chat Section -->
+        <div id="chat-container">
+            <div id="chat-box"></div>
+            <div class="chat-input-area">
+                <input type="text" id="chat-input" placeholder="Type a message...">
+                <button id="send-btn">Send</button>
+            </div>
+        </div>
     </div>
 
     <script>
@@ -125,6 +196,14 @@
             if (token) {
                 tokenInput.value = token;
                 fetchOrderStatus(token);
+                // Directly initialize chat if token is present
+                // We don't need to wait for status success to allow chatting history viewing
+                // But verifying the order exists first is better practice. 
+                // However, for UX persistence, let's try to verify via the fetch first.
+                // Actually, the hook at the bottom is complex. Let's just allow it here.
+                if (typeof initChat === 'function') {
+                    initChat(token);
+                }
             }
         });
 
@@ -214,6 +293,73 @@
                     console.error('Service Worker Registration Failed:', error);
                 });
         }
+    </script>
+    <script>
+        // --- Chat Logic ---
+        const chatContainer = document.getElementById('chat-container');
+        const chatBox = document.getElementById('chat-box');
+        const chatInput = document.getElementById('chat-input');
+        const sendBtn = document.getElementById('send-btn');
+        let currentToken = null;
+        let chatPollInterval = null;
+
+        function initChat(token) {
+            if (currentToken === token) return; // Already initialized
+            currentToken = token;
+            chatContainer.style.display = 'block';
+            fetchMessages();
+            if (chatPollInterval) clearInterval(chatPollInterval);
+            chatPollInterval = setInterval(fetchMessages, 3000);
+        }
+
+        async function fetchMessages() {
+            if (!currentToken) return;
+            try {
+                const response = await fetch(`/api/orders/chat/${currentToken}/?t=${new Date().getTime()}`);
+                if (response.ok) {
+                    const messages = await response.json();
+                    renderMessages(messages);
+                }
+            } catch (error) {
+                console.error("Error fetching messages:", error);
+            }
+        }
+
+        function renderMessages(messages) {
+            chatBox.innerHTML = '';
+            if (messages.length === 0) {
+                chatBox.innerHTML = '<div style="text-align:center; color:#ccc; margin-top:20px;">No messages yet.</div>';
+            }
+            messages.forEach(msg => {
+                const div = document.createElement('div');
+                div.className = `message ${msg.sender.toLowerCase()}`;
+                div.innerHTML = `<strong>${msg.sender === 'CUSTOMER' ? 'You' : 'Manager'}:</strong> ${msg.message}`;
+                chatBox.appendChild(div);
+            });
+            chatBox.scrollTop = chatBox.scrollHeight;
+        }
+
+        async function sendMessage() {
+            const text = chatInput.value.trim();
+            if (!text || !currentToken) return;
+
+            try {
+                const response = await fetch(`/api/orders/chat/${currentToken}/`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ sender: 'CUSTOMER', message: text })
+                });
+
+                if (response.ok) {
+                    chatInput.value = '';
+                    fetchMessages();
+                }
+            } catch (error) {
+                console.error("Error sending message:", error);
+            }
+        }
+
+        sendBtn.addEventListener('click', sendMessage);
     </script>
 </body>
 

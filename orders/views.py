@@ -57,41 +57,6 @@ def update_order_status(request, pk):
     serializer = OrderSerializer(order, data=request.data, partial=True)
     if serializer.is_valid():
         serializer.save()
-        serializer.save()
-        
-        # Send Web Push Notification
-        try:
-            subscriptions = PushSubscription.objects.filter(token_number=order.token_number)
-            payload = json.dumps({
-                "title": "Order Update",
-                "body": f"Your order status is now {order.status}"
-            })
-            
-            vapid_private_key = os.getenv("VAPID_PRIVATE_KEY")
-            vapid_claims = {"sub": f"mailto:{os.getenv('VAPID_ADMIN_EMAIL')}"}
-            
-            # If keys are not set, we skip (or you could log a warning)
-            if vapid_private_key:
-                for sub in subscriptions:
-                    try:
-                        webpush(
-                            subscription_info={
-                                "endpoint": sub.endpoint,
-                                "keys": {
-                                    "p256dh": sub.p256dh,
-                                    "auth": sub.auth
-                                }
-                            },
-                            data=payload,
-                            vapid_private_key=vapid_private_key,
-                            vapid_claims=vapid_claims
-                        )
-                    except WebPushException as e:
-                        # Log error but continue
-                        print(f"Push failed: {e}")
-        except Exception as e:
-             print(f"Notification error: {e}")
-
         return Response(serializer.data)
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
@@ -279,6 +244,39 @@ def test_push(request):
     return Response({
         "detail": f"Test push finished. Success: {success_count}, Failed/Removed: {failure_count}"
     }, status=200)
+
+from rest_framework import generics
+from rest_framework import serializers
+from .serializers import ChatMessageSerializer
+from .models import ChatMessage
+
+class ChatMessageListCreate(generics.ListCreateAPIView):
+    serializer_class = ChatMessageSerializer
+    permission_classes = [] # Open for now, or use IsAuthenticated if login required
+    authentication_classes = [] 
+
+    def get_queryset(self):
+        token = self.kwargs['token']
+        return ChatMessage.objects.filter(order__token_number=token)
+
+    def perform_create(self, serializer):
+        token = self.kwargs['token']
+        order = Order.objects.filter(token_number=token).last() # Get latest order for token
+        if order:
+            serializer.save(order=order)
+        else:
+            raise serializers.ValidationError("Order not found")
+
+from django.views.generic import TemplateView
+
+class ManagerDashboardView(TemplateView):
+    template_name = "orders/manager_chat.html"
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        # Get all active orders (not delivered/cancelled) for the list
+        context['active_orders'] = Order.objects.filter(status__in=['PREPARING', 'READY']).order_by('-created_at')
+        return context
 
 
 

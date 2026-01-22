@@ -1,12 +1,18 @@
 from rest_framework import serializers
-from .models import Order, PushSubscription
+from .models import Order, ChatMessage, PushSubscription
 
 class OrderSerializer(serializers.ModelSerializer):
     class Meta:
         model = Order
-        fields = '__all__'
+        fields = ['id', 'token_number', 'status', 'is_called', 'created_at']
+
+class ChatMessageSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ChatMessage
+        fields = ['id', 'order', 'sender', 'message', 'timestamp']
+        read_only_fields = ['id', 'timestamp', 'order']
 
 class PushSubscriptionSerializer(serializers.ModelSerializer):
     class Meta:
         model = PushSubscription
-        fields = ['token_number', 'endpoint', 'p256dh', 'auth']
+        fields = ['id', 'token_number', 'endpoint', 'p256dh', 'auth', 'created_at']

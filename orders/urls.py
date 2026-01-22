@@ -9,4 +9,6 @@ urlpatterns = [
     path('push/test/', views.test_push, name='test_push'),
     path('track/', views.track_order, name='track_order'),
     path('track-page/', views.track_order_page, name='track_order_page'),
+    path('chat/<int:token>/', views.ChatMessageListCreate.as_view(), name='chat_api'),
+    path('manager/chat/', views.ManagerDashboardView.as_view(), name='manager_dashboard'),
 ]
