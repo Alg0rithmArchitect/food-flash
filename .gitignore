@@ -8,3 +8,4 @@ staticfiles/
 # OS files
 .DS_Store
 Thumbs.db
+stress_test_push.py
