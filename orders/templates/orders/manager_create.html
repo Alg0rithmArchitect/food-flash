@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Create Order - Food Flash</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            background: #f8f9fa;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 500px;
+            margin: 0 auto;
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+        }
+
+        h1 {
+            color: #28a745;
+            text-align: center;
+        }
+
+        .back-link {
+            display: block;
+            margin-bottom: 20px;
+            color: #666;
+            text-decoration: none;
+        }
+
+        input {
+            width: 100%;
+            padding: 15px;
+            margin-bottom: 20px;
+            font-size: 18px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            box-sizing: border-box;
+        }
+
+        button {
+            width: 100%;
+            padding: 15px;
+            background: #28a745;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            font-size: 18px;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background: #218838;
+        }
+
+        #result {
+            margin-top: 30px;
+            text-align: center;
+            display: none;
+            background: #f9f9f9;
+            padding: 20px;
+            border-radius: 10px;
+        }
+
+        #qr-placeholder {
+            margin: 15px auto;
+        }
+
+        .link-box {
+            word-break: break-all;
+            color: #007bff;
+            font-size: 14px;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+
+<body>
+    <a href="{% url 'manager_menu' %}" class="back-link">← Back to Dashboard</a>
+    <div class="container">
+        <h1>Create New Order</h1>
+        <input type="number" id="token" placeholder="Enter Token Number">
+        <button onclick="createOrder()">Generate QR Code</button>
+
+        <div id="result">
+            <h3>Order Created!</h3>
+            <div id="qr-placeholder"></div>
+            <div class="link-box" id="link-text"></div>
+        </div>
+    </div>
+
+    <script>
+        async function createOrder() {
+            const token = document.getElementById('token').value;
+            if (!token) return alert("Please enter a token number");
+
+            try {
+                // Check if exists or create
+                const res = await fetch('/api/orders/', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token }}' },
+                    body: JSON.stringify({ token_number: token })
+                });
+
+                if (res.ok) {
+                    const trackingUrl = `${window.location.origin}/food-flash/track/?token=${token}`;
+
+                    document.getElementById('result').style.display = 'block';
+                    document.getElementById('qr-placeholder').innerHTML = `<img src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(trackingUrl)}" alt="QR Code">`;
+                    document.getElementById('link-text').innerText = trackingUrl;
+                } else {
+                    const err = await res.json();
+                    alert("Error: " + (err.token_number ? "Token already exists." : "Failed to create."));
+                }
+            } catch (e) { console.error(e); alert("Network error"); }
+        }
+    </script>
+</body>
+
+</html>

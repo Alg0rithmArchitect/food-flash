@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Call Token - Food Flash</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            background: #f8f9fa;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 500px;
+            margin: 0 auto;
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+        }
+
+        h1 {
+            color: #ffc107;
+            text-align: center;
+            color: #d39e00;
+        }
+
+        .back-link {
+            display: block;
+            margin-bottom: 20px;
+            color: #666;
+            text-decoration: none;
+        }
+
+        input {
+            width: 100%;
+            padding: 15px;
+            margin-bottom: 20px;
+            font-size: 18px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            box-sizing: border-box;
+        }
+
+        button {
+            width: 100%;
+            padding: 15px;
+            background: #ffc107;
+            color: #333;
+            border: none;
+            border-radius: 5px;
+            font-size: 18px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background: #e0a800;
+        }
+    </style>
+</head>
+
+<body>
+    <a href="{% url 'manager_menu' %}" class="back-link">← Back to Dashboard</a>
+    <div class="container">
+        <h1>Call Token</h1>
+        <p style="text-align: center; color: #666;">Announce token on TV Display</p>
+
+        <input type="number" id="token" placeholder="Enter Token Number">
+        <button onclick="callToken()">📣 Call Token</button>
+        <div id="status-msg" style="margin-top: 15px; text-align: center; font-weight: bold; display: none;"></div>
+    </div>
+
+    <script>
+        function showMsg(text, isError = false) {
+            const el = document.getElementById('status-msg');
+            el.style.display = 'block';
+            el.style.color = isError ? '#dc3545' : '#d39e00'; // Dark yellow for success in call
+            el.innerText = text;
+            setTimeout(() => el.style.display = 'none', 3000);
+        }
+
+        async function callToken() {
+            const token = document.getElementById('token').value;
+            if (!token) return showMsg("Please enter a token number", true);
+
+            // 1. Get ID
+            let id = null;
+            try {
+                const search = await fetch(`/api/orders/track/?token=${token}`);
+                if (!search.ok) throw new Error("Order not found");
+                const data = await search.json();
+                id = data.id;
+            } catch (e) { return showMsg("Token not found", true); }
+
+            // 2. Call
+            try {
+                const res = await fetch(`/api/orders/${id}/call/`, {
+                    method: 'POST',
+                    headers: { 'X-CSRFToken': '{{ csrf_token }}' }
+                });
+
+                if (res.ok) showMsg(`Token ${token} called!`);
+                else showMsg("Call failed", true);
+            } catch (e) { console.error(e); showMsg("Network error", true); }
+        }
+    </script>
+</body>
+
+</html>

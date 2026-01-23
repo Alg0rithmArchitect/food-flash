@@ -144,9 +144,16 @@
 
     <div class="container">
         <h1>Track Your Order</h1>
-        <input type="number" id="token-input" placeholder="Enter Token Number" required>
-        <button id="track-btn">Track Order</button>
+        <div id="input-section">
+            <input type="number" id="token-input" placeholder="Enter Token Number" required>
+            <button id="track-btn">Track Order</button>
+        </div>
+        <div id="token-display" style="display:none; margin-bottom: 20px;">
+            <h3>Token #<span id="display-token"></span></h3>
+        </div>
         <div id="status-container"></div>
+        <button id="toggle-chat-btn" style="display:none; margin-top: 15px; background-color: #6c757d;">Chat with
+            Manager</button>
 
         <!-- Chat Section -->
         <div id="chat-container">
@@ -195,15 +202,31 @@
 
             if (token) {
                 tokenInput.value = token;
+                // Switch UI to read-only mode for token
+                document.getElementById('input-section').style.display = 'none';
+                document.getElementById('display-token').innerText = token;
+                document.getElementById('token-display').style.display = 'block';
+
                 fetchOrderStatus(token);
-                // Directly initialize chat if token is present
-                // We don't need to wait for status success to allow chatting history viewing
-                // But verifying the order exists first is better practice. 
-                // However, for UX persistence, let's try to verify via the fetch first.
-                // Actually, the hook at the bottom is complex. Let's just allow it here.
+
                 if (typeof initChat === 'function') {
                     initChat(token);
+                    document.getElementById('toggle-chat-btn').style.display = 'block';
                 }
+            }
+        });
+
+        // Chat Toggle Logic
+        const toggleChatBtn = document.getElementById('toggle-chat-btn');
+        const localChatContainer = document.getElementById('chat-container');
+
+        toggleChatBtn.addEventListener('click', () => {
+            if (localChatContainer.style.display === 'none' || localChatContainer.style.display === '') {
+                localChatContainer.style.display = 'block';
+                toggleChatBtn.innerText = 'Hide Chat';
+            } else {
+                localChatContainer.style.display = 'none';
+                toggleChatBtn.innerText = 'Chat with Manager';
             }
         });
 
@@ -306,7 +329,7 @@
         function initChat(token) {
             if (currentToken === token) return; // Already initialized
             currentToken = token;
-            chatContainer.style.display = 'block';
+            // chatContainer.style.display = 'block'; // Don't auto-show
             fetchMessages();
             if (chatPollInterval) clearInterval(chatPollInterval);
             chatPollInterval = setInterval(fetchMessages, 3000);

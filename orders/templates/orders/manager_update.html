@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Update Status - Food Flash</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            background: #f8f9fa;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 500px;
+            margin: 0 auto;
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+        }
+
+        h1 {
+            color: #17a2b8;
+            text-align: center;
+        }
+
+        .back-link {
+            display: block;
+            margin-bottom: 20px;
+            color: #666;
+            text-decoration: none;
+        }
+
+        input,
+        select {
+            width: 100%;
+            padding: 15px;
+            margin-bottom: 20px;
+            font-size: 18px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            box-sizing: border-box;
+        }
+
+        button {
+            width: 100%;
+            padding: 15px;
+            background: #17a2b8;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            font-size: 18px;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background: #138496;
+        }
+    </style>
+</head>
+
+<body>
+    <a href="{% url 'manager_menu' %}" class="back-link">← Back to Dashboard</a>
+    <div class="container">
+        <h1>Update Order Status</h1>
+
+        <input type="number" id="token" placeholder="Enter Token Number">
+
+        <select id="status">
+            <option value="PREPARING">Preparing</option>
+            <option value="READY">Ready</option>
+            <option value="DELIVERED">Delivered</option>
+            <option value="CANCELLED">Cancelled</option>
+        </select>
+
+        <button onclick="updateStatus()">Update Status</button>
+        <div id="status-msg" style="margin-top: 15px; text-align: center; font-weight: bold; display: none;"></div>
+    </div>
+
+    <script>
+        function showMsg(text, isError = false) {
+            const el = document.getElementById('status-msg');
+            el.style.display = 'block';
+            el.style.color = isError ? '#dc3545' : '#28a745';
+            el.innerText = text;
+            setTimeout(() => el.style.display = 'none', 3000);
+        }
+
+        async function updateStatus() {
+            const token = document.getElementById('token').value;
+            const status = document.getElementById('status').value;
+            if (!token) return showMsg("Please enter a token number", true);
+
+            // 1. Get ID from Token
+            let id = null;
+            try {
+                const search = await fetch(`/api/orders/track/?token=${token}`);
+                if (!search.ok) throw new Error("Order not found");
+                const data = await search.json();
+                id = data.id;
+            } catch (e) { return showMsg("Token not found", true); }
+
+            // 2. Update
+            try {
+                const res = await fetch(`/api/orders/${id}/status/`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token }}' },
+                    body: JSON.stringify({ status: status })
+                });
+
+                if (res.ok) showMsg(`Token ${token} updated to ${status}`);
+                else showMsg("Update failed", true);
+            } catch (e) { console.error(e); showMsg("Network error", true); }
+        }
+    </script>
+</body>
+
+</html>

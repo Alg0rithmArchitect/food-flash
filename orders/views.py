@@ -33,8 +33,53 @@ def track_order(request):
             status=status.HTTP_400_BAD_REQUEST
         )
 
+from django.shortcuts import render, redirect
+from django.contrib.auth import authenticate, login, logout
+from django.contrib.auth.decorators import login_required
+from django.views.decorators.csrf import csrf_exempt
+
+def customer_landing(request):
+    return render(request, 'orders/landing.html')
+
+def manager_login(request):
+    if request.method == 'POST':
+        # Simple Login Logic (replace with standard auth form if needed)
+        # Assuming using django admin users
+        from django.contrib.auth.forms import AuthenticationForm
+        form = AuthenticationForm(request, data=request.POST)
+        if form.is_valid():
+            login(request, form.get_user())
+            return redirect('manager_menu')
+    else:
+        from django.contrib.auth.forms import AuthenticationForm
+        form = AuthenticationForm()
+    return render(request, 'orders/manager_login.html', {'form': form})
+
+def manager_logout(request):
+    logout(request)
+    return redirect('manager_login')
+
+@login_required(login_url='manager_login')
+def manager_menu(request):
+    return render(request, 'orders/manager_menu.html')
+
+@login_required(login_url='manager_login')
+def manager_create_order(request):
+    return render(request, 'orders/manager_create.html')
+
+@login_required(login_url='manager_login')
+def manager_update_status(request):
+    return render(request, 'orders/manager_update.html')
+
+@login_required(login_url='manager_login')
+def manager_call_token(request):
+    return render(request, 'orders/manager_call.html')
+
+# Deprecated/Renamed
+def manager_dashboard(request):
+    return redirect('manager_menu')
+
 def track_order_page(request):
-    from django.shortcuts import render
     return render(request, 'orders/track_order.html')
 
 def service_worker(request):

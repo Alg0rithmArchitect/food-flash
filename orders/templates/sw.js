@@ -13,7 +13,10 @@ self.addEventListener('push', function (event) {
 
     event.waitUntil(
         self.registration.showNotification(title, {
-            body: message
+            body: message,
+            icon: '/static/icon.png', // Fallback icon if you have one
+            vibrate: [200, 100, 200, 100, 200],
+            requireInteraction: true
         })
     );
 });

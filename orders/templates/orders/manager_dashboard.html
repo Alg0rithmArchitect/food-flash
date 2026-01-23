@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Manager Dashboard - Food Flash</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f8f9fa;
+            color: #333;
+            margin: 0;
+            padding: 20px;
+        }
+
+        .dashboard-container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            text-align: center;
+            color: #007bff;
+            margin-bottom: 30px;
+        }
+
+        .section {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+            margin-bottom: 20px;
+        }
+
+        h2 {
+            margin-top: 0;
+            font-size: 1.25rem;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 10px;
+        }
+
+        .input-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+        }
+
+        input,
+        select {
+            flex: 1;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+
+        button {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+            color: white;
+            transition: opacity 0.2s;
+        }
+
+        button:hover {
+            opacity: 0.9;
+        }
+
+        .btn-create {
+            background-color: #28a745;
+        }
+
+        .btn-update {
+            background-color: #17a2b8;
+        }
+
+        .btn-call {
+            background-color: #ffc107;
+            color: #333;
+        }
+
+        .btn-msg {
+            background-color: #6f42c1;
+        }
+
+        .btn-chat {
+            background-color: #007bff;
+            width: 100%;
+            display: block;
+            text-align: center;
+            text-decoration: none;
+            padding: 15px 0;
+            font-size: 1.1em;
+        }
+
+        #qr-result {
+            margin-top: 15px;
+            text-align: center;
+            display: none;
+            background: #f1f1f1;
+            padding: 10px;
+            border-radius: 5px;
+        }
+
+        #qr-link {
+            word-break: break-all;
+            color: #007bff;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="dashboard-container">
+        <h1>⚡ Food Flash Manager</h1>
+
+        <!-- Create Order -->
+        <div class="section">
+            <h2>Create New Order & Generate QR</h2>
+            <div class="input-group">
+                <input type="number" id="create-token" placeholder="Token Number">
+                <button class="btn-create" onclick="createOrder()">Create Order</button>
+            </div>
+            <div id="qr-result">
+                <p><strong>Order Created!</strong></p>
+                <div id="qr-code-placeholder"
+                    style="width: 150px; height: 150px; background: #ddd; margin: 10px auto; display: flex; align-items: center; justify-content: center;">
+                    QR Code Here
+                </div>
+                <p>Link: <a id="qr-link" href="#" target="_blank">...</a></p>
+            </div>
+        </div>
+
+        <!-- Update Status -->
+        <div class="section">
+            <h2>Update Order Status</h2>
+            <div class="input-group">
+                <input type="number" id="update-token" placeholder="Token Number">
+                <select id="update-status">
+                    <option value="PREPARING">Preparing</option>
+                    <option value="READY">Ready</option>
+                    <option value="DELIVERED">Delivered</option>
+                    <option value="CANCELLED">Cancelled</option>
+                </select>
+                <button class="btn-update" onclick="updateStatus()">Update</button>
+            </div>
+        </div>
+
+        <!-- Call Token -->
+        <div class="section">
+            <h2>Call Token (TV Display)</h2>
+            <div class="input-group">
+                <input type="number" id="call-token" placeholder="Token Number">
+                <button class="btn-call" onclick="callToken()">Call Token</button>
+            </div>
+        </div>
+
+        <!-- Send Message -->
+        <div class="section">
+            <h2>Send Quick Message</h2>
+            <div class="input-group">
+                <input type="number" id="msg-token" placeholder="Token Number">
+                <input type="text" id="msg-text" placeholder="Message...">
+                <button class="btn-msg" onclick="sendQuickMessage()">Send</button>
+            </div>
+        </div>
+
+        <!-- Full Chat -->
+        <a href="/api/orders/manager/chat/" target="_blank" class="section btn-chat">
+            Open Full Chat Dashboard 💬
+        </a>
+    </div>
+
+    <!-- Logic -->
+    <script>
+        // Helper to get Order ID from Token (Mock logic or actual fetch needed?)
+        // Since APIs use ID (pk) for update/call, we assume Token == ID for simplicity 
+        // OR we need to fetch the order first.
+        // Given complexity, let's assume for this MVP that the Manager knows the ID? 
+        // No, the prompt says "Input Token". 
+        // **Issue**: The current API `api/orders/<pk>/status/` requires PK.
+        // **Resolution**: I will try to use Token as PK if they match, 
+        // OR I will fetch the order by token first in JS.
+        // Since I can't change backend, I'll use the existing `api/orders/track/?token=` to get the ID!
+
+        async function getOrderId(token) {
+            try {
+                const res = await fetch(`/api/orders/track/?token=${token}`);
+                if (!res.ok) throw new Error("Order not found");
+                const data = await res.json();
+                return data.id;
+            } catch (e) {
+                alert("Order not found for Token " + token);
+                return null;
+            }
+        }
+
+        async function createOrder() {
+            const token = document.getElementById('create-token').value;
+            if (!token) return alert("Enter token");
+
+            try {
+                const res = await fetch('/api/orders/', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ token_number: token })
+                });
+
+                if (res.ok) {
+                    const data = await res.json();
+                    const link = `${window.location.origin}/api/orders/track-page/?token=${token}`;
+
+                    document.getElementById('qr-result').style.display = 'block';
+                    document.getElementById('qr-link').href = link;
+                    document.getElementById('qr-link').innerText = link;
+                    document.getElementById('qr-code-placeholder').innerHTML = `<img src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(link)}" alt="QR">`;
+                } else {
+                    alert("Failed to create (Token might exist)");
+                }
+            } catch (e) { console.error(e); alert("Error creating order"); }
+        }
+
+        async function updateStatus() {
+            const token = document.getElementById('update-token').value;
+            const status = document.getElementById('update-status').value;
+            if (!token) return;
+
+            const id = await getOrderId(token);
+            if (!id) return;
+
+            try {
+                const res = await fetch(`/api/orders/${id}/status/`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ status: status }) // Backend expects {status: ...}
+                });
+                if (res.ok) alert(`Token ${token} updated to ${status}`);
+                else alert("Update failed");
+            } catch (e) { console.error(e); }
+        }
+
+        async function callToken() {
+            const token = document.getElementById('call-token').value;
+            if (!token) return;
+            const id = await getOrderId(token);
+            if (!id) return;
+
+            try {
+                const res = await fetch(`/api/orders/${id}/call/`, { method: 'POST' });
+                if (res.ok) alert(`Token ${token} called!`);
+                else alert("Call failed");
+            } catch (e) { console.error(e); }
+        }
+
+        async function sendQuickMessage() {
+            const token = document.getElementById('msg-token').value;
+            const text = document.getElementById('msg-text').value;
+            if (!token || !text) return;
+
+            try {
+                const res = await fetch(`/api/orders/chat/${token}/`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ sender: 'MANAGER', message: text })
+                });
+                if (res.ok) {
+                    alert("Message sent!");
+                    document.getElementById('msg-text').value = '';
+                }
+                else alert("Message failed");
+            } catch (e) { console.error(e); }
+        }
+    </script>
+
+</body>
+
+</html>

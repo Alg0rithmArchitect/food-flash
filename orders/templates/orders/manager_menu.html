@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Manager Dashboard - Food Flash</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            background: #f8f9fa;
+            margin: 0;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+        }
+
+        h1 {
+            margin: 0;
+            color: #333;
+        }
+
+        .logout-btn {
+            text-decoration: none;
+            color: #dc3545;
+            font-weight: bold;
+            border: 1px solid #dc3545;
+            padding: 5px 15px;
+            border-radius: 5px;
+        }
+
+        .menu-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+        }
+
+        .menu-item {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+            text-align: center;
+            text-decoration: none;
+            color: #333;
+            transition: transform 0.2s, box-shadow 0.2s;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            height: 150px;
+        }
+
+        .menu-item:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 15px rgba(0, 0, 0, 0.1);
+        }
+
+        .icon {
+            font-size: 40px;
+            margin-bottom: 15px;
+        }
+
+        .title {
+            font-size: 20px;
+            font-weight: bold;
+        }
+
+        .create {
+            border-top: 5px solid #28a745;
+        }
+
+        .update {
+            border-top: 5px solid #17a2b8;
+        }
+
+        .call {
+            border-top: 5px solid #ffc107;
+        }
+
+        .chat {
+            border-top: 5px solid #007bff;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <header>
+            <h1>⚡ Food Flash Manager</h1>
+            <a href="{% url 'manager_logout' %}" class="logout-btn">Logout</a>
+        </header>
+
+        <div class="menu-grid">
+            <a href="{% url 'manager_create' %}" class="menu-item create">
+                <div class="icon">📝</div>
+                <div class="title">Create Order</div>
+            </a>
+
+            <a href="{% url 'manager_update' %}" class="menu-item update">
+                <div class="icon">🔄</div>
+                <div class="title">Update Status</div>
+            </a>
+
+            <a href="{% url 'manager_call' %}" class="menu-item call">
+                <div class="icon">📢</div>
+                <div class="title">Call Token</div>
+            </a>
+
+            <a href="/api/orders/manager/chat/" target="_blank" class="menu-item chat">
+                <div class="icon">💬</div>
+                <div class="title">Customer Chat</div>
+            </a>
+        </div>
+    </div>
+</body>
+
+</html>

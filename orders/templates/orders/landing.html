@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Food Flash - Welcome</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background: linear-gradient(135deg, #FF6B6B 0%, #FFE66D 100%);
+            color: #333;
+        }
+
+        .card {
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+            text-align: center;
+            width: 90%;
+            max-width: 400px;
+        }
+
+        h1 {
+            margin-top: 0;
+            color: #FF6B6B;
+        }
+
+        p {
+            color: #666;
+            margin-bottom: 25px;
+        }
+
+        input {
+            width: 100%;
+            padding: 15px;
+            margin-bottom: 20px;
+            border: 2px solid #eee;
+            border-radius: 10px;
+            box-sizing: border-box;
+            font-size: 18px;
+            text-align: center;
+            transition: border-color 0.3s;
+        }
+
+        input:focus {
+            border-color: #FF6B6B;
+            outline: none;
+        }
+
+        button {
+            width: 100%;
+            padding: 15px;
+            background-color: #FF6B6B;
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 18px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: transform 0.2s, background-color 0.2s;
+        }
+
+        button:hover {
+            background-color: #EE5253;
+            transform: translateY(-2px);
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="card">
+        <h1>Food Flash ⚡</h1>
+        <p>Enter your token number to track your order.</p>
+
+        <input type="number" id="token-input" placeholder="Token #" inputmode="numeric">
+        <button onclick="trackOrder()">Track Order</button>
+    </div>
+
+    <script>
+        function trackOrder() {
+            const token = document.getElementById('token-input').value;
+            if (token) {
+                // Redirect to the tracking URL
+                window.location.href = `/food-flash/track/?token=${token}`;
+            } else {
+                alert("Please enter a token number.");
+            }
+        }
+
+        // Allow enter key
+        document.getElementById('token-input').addEventListener('keypress', function (e) {
+            if (e.key === 'Enter') trackOrder();
+        });
+    </script>
+
+</body>
+
+</html>
