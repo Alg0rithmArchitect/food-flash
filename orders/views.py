@@ -105,12 +105,52 @@ def update_order_status(request, pk):
         return Response(serializer.data)
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+from datetime import datetime
+import threading
+
+# Azure IoT Import (Try/Except to avoid crashing if package issues)
+try:
+    from azure.iot.hub import IoTHubRegistryManager
+except ImportError:
+    IoTHubRegistryManager = None
+
+def send_iot_message(token_number):
+    """
+    Sends a C2D message to the registered Android TV device.
+    """
+    connection_string = os.getenv("IOTHUB_CONNECTION_STRING")
+    device_id = os.getenv("ANDROID_TV_DEVICE_ID")
+
+    if not connection_string or not device_id or not IoTHubRegistryManager:
+        print("Azure IoT Hub not configured or package missing.")
+        return
+
+    try:
+        registry_manager = IoTHubRegistryManager(connection_string)
+        
+        payload = json.dumps({
+            "token": token_number,
+            "timestamp": datetime.now().isoformat()
+        })
+        
+        # Send to specific device
+        registry_manager.send_c2d_message(device_id, payload)
+        print(f"IoT Message sent to {device_id}: {payload}")
+        
+    except Exception as e:
+        print(f"Failed to send IoT Message: {e}")
+
+
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def call_order(request, pk):
     order = get_object_or_404(Order, pk=pk)
     order.is_called = True
     order.save()
+    
+    # Trigger IoT Message Async
+    threading.Thread(target=send_iot_message, args=(order.token_number,)).start()
+    
     serializer = OrderSerializer(order)
     return Response(serializer.data)
 
