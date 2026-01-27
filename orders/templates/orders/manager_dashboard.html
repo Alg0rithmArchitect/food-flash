@@ -210,11 +210,12 @@
 
                 if (res.ok) {
                     const data = await res.json();
-                    const link = `${window.location.origin}/api/orders/track-page/?token=${token}`;
+                    const link = `${window.location.origin}/food-flash/track/?token=${token}`;
 
                     document.getElementById('qr-result').style.display = 'block';
-                    document.getElementById('qr-link').href = link;
-                    document.getElementById('qr-link').innerText = link;
+                    const qrLink = document.getElementById('qr-link');
+                    qrLink.href = link;
+                    qrLink.innerText = link;
                     document.getElementById('qr-code-placeholder').innerHTML = `<img src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(link)}" alt="QR">`;
                 } else {
                     alert("Failed to create (Token might exist)");

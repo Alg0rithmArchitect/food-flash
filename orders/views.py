@@ -6,25 +6,48 @@ from rest_framework import status
 from django.shortcuts import get_object_or_404
 from .models import Order, PushSubscription
 from .models import Order, PushSubscription
-from .serializers import OrderSerializer, PushSubscriptionSerializer
+from .serializers import OrderSerializer, PushSubscriptionSerializer, OutletSerializer
 from pywebpush import webpush, WebPushException, Vapid
 import os
 import json
 from django.conf import settings
 from pathlib import Path
+from .models import Outlet
+
+@api_view(['GET'])
+@authentication_classes([]) # Public access needed for landing page
+def get_outlets(request):
+    outlets = Outlet.objects.all()
+    serializer = OutletSerializer(outlets, many=True)
+    return Response(serializer.data)
 
 @api_view(['GET'])
 def track_order(request):
     token = request.query_params.get('token')
+    
+    outlet_id = request.query_params.get('outlet_id')
     
     if not token:
         return Response(
             {"detail": "Token parameter is required."}, 
             status=status.HTTP_400_BAD_REQUEST
         )
-        
+    
     try:
-        order = get_object_or_404(Order, token_number=token)
+        order = None
+        if outlet_id:
+            order = Order.objects.filter(token_number=token, outlet_id=outlet_id).first()
+        
+        if not order:
+            # Fallback: search globally for this token
+            order = Order.objects.filter(token_number=token).order_by('-created_at').first()
+            
+        if not order:
+            return Response(
+                {"detail": "Order not found."}, 
+                status=status.HTTP_404_NOT_FOUND
+            )
+            
         serializer = OrderSerializer(order)
         return Response(serializer.data)
     except ValueError:
@@ -65,15 +88,42 @@ def manager_menu(request):
 
 @login_required(login_url='manager_login')
 def manager_create_order(request):
-    return render(request, 'orders/manager_create.html')
+    outlet = get_manager_outlet(request.user)
+    server_ip = get_local_ip()
+    
+    # Check for automated SSH Public URL
+    public_url = getattr(settings, 'PUBLIC_TUNNEL_URL', None)
+    
+    context = {
+        'outlet_id': outlet.id if outlet else None,
+        'server_ip': server_ip,
+        'public_url': public_url
+    }
+    return render(request, 'orders/manager_create.html', context)
+
+def get_local_ip():
+    import socket
+    try:
+        # Create a dummy socket connection to Google DNS to find the local IP used for routing
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("8.8.8.8", 80))
+        ip = s.getsockname()[0]
+        s.close()
+        return ip
+    except Exception:
+        return '127.0.0.1'
 
 @login_required(login_url='manager_login')
 def manager_update_status(request):
-    return render(request, 'orders/manager_update.html')
+    outlet = get_manager_outlet(request.user)
+    context = {'outlet_id': outlet.id if outlet else None}
+    return render(request, 'orders/manager_update.html', context)
 
 @login_required(login_url='manager_login')
 def manager_call_token(request):
-    return render(request, 'orders/manager_call.html')
+    outlet = get_manager_outlet(request.user)
+    context = {'outlet_id': outlet.id if outlet else None}
+    return render(request, 'orders/manager_call.html', context)
 
 # Deprecated/Renamed
 def manager_dashboard(request):
@@ -89,16 +139,24 @@ def service_worker(request):
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def create_order(request):
+    outlet = get_manager_outlet(request.user)
+    if not outlet:
+        return Response({"detail": "Manager not assigned to an outlet."}, status=status.HTTP_403_FORBIDDEN)
+
     serializer = OrderSerializer(data=request.data)
     if serializer.is_valid():
-        serializer.save()
+        serializer.save(outlet=outlet)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 @api_view(['PATCH'])
 @permission_classes([IsAuthenticated])
 def update_order_status(request, pk):
-    order = get_object_or_404(Order, pk=pk)
+    outlet = get_manager_outlet(request.user)
+    if not outlet:
+        return Response({"detail": "Manager not assigned to an outlet."}, status=status.HTTP_403_FORBIDDEN)
+
+    order = get_object_or_404(Order, pk=pk, outlet=outlet)
     serializer = OrderSerializer(order, data=request.data, partial=True)
     if serializer.is_valid():
         serializer.save()
@@ -114,14 +172,27 @@ try:
 except ImportError:
     IoTHubRegistryManager = None
 
-def send_iot_message(token_number):
-    """
-    Sends a C2D message to the registered Android TV device.
-    """
-    connection_string = os.getenv("IOTHUB_CONNECTION_STRING")
-    device_id = os.getenv("ANDROID_TV_DEVICE_ID")
+def get_manager_outlet(user):
+    """Helper to get the outlet for a logged-in manager."""
+    if not user.is_authenticated:
+        return None
+    try:
+        return user.outletmanager.outlet
+    except Exception:
+        return None
 
-    if not connection_string or not device_id or not IoTHubRegistryManager:
+def send_iot_message(order):
+    """
+    Sends a C2D message to the registered Android TV device for the specific outlet.
+    """
+    if not order.outlet or not order.outlet.android_tv_device_id:
+        print(f"Skipping IoT: No outlet or device ID for Order {order.id}")
+        return
+
+    connection_string = os.getenv("IOTHUB_CONNECTION_STRING")
+    device_id = order.outlet.android_tv_device_id
+
+    if not connection_string or not IoTHubRegistryManager:
         print("Azure IoT Hub not configured or package missing.")
         return
 
@@ -129,11 +200,11 @@ def send_iot_message(token_number):
         registry_manager = IoTHubRegistryManager(connection_string)
         
         payload = json.dumps({
-            "token": token_number,
+            "token": order.token_number,
             "timestamp": datetime.now().isoformat()
         })
         
-        # Send to specific device
+        # Send to specific device defined in the Outlet
         registry_manager.send_c2d_message(device_id, payload)
         print(f"IoT Message sent to {device_id}: {payload}")
         
@@ -144,12 +215,17 @@ def send_iot_message(token_number):
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def call_order(request, pk):
-    order = get_object_or_404(Order, pk=pk)
+    # Scope to manager's outlet
+    outlet = get_manager_outlet(request.user)
+    if not outlet:
+         return Response({"detail": "Manager not assigned to an outlet."}, status=status.HTTP_403_FORBIDDEN)
+
+    order = get_object_or_404(Order, pk=pk, outlet=outlet)
     order.is_called = True
     order.save()
     
     # Trigger IoT Message Async
-    threading.Thread(target=send_iot_message, args=(order.token_number,)).start()
+    threading.Thread(target=send_iot_message, args=(order,)).start()
     
     serializer = OrderSerializer(order)
     return Response(serializer.data)
@@ -360,7 +436,11 @@ class ManagerDashboardView(TemplateView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         # Get all active orders (not delivered/cancelled) for the list
-        context['active_orders'] = Order.objects.filter(status__in=['PREPARING', 'READY']).order_by('-created_at')
+        outlet = get_manager_outlet(self.request.user)
+        if outlet:
+            context['active_orders'] = Order.objects.filter(outlet=outlet, status__in=['PREPARING', 'READY']).order_by('-created_at')
+        else:
+            context['active_orders'] = []
         return context
 
 

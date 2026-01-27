@@ -1,5 +1,10 @@
 from rest_framework import serializers
-from .models import Order, ChatMessage, PushSubscription
+from .models import Order, ChatMessage, PushSubscription, Outlet
+
+class OutletSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Outlet
+        fields = ['id', 'name', 'restaurant_name']
 
 class OrderSerializer(serializers.ModelSerializer):
     class Meta:

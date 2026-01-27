@@ -177,11 +177,23 @@
             }
 
             try {
-                const response = await fetch(`/api/orders/track/?token=${token}`);
+                // Get outlet_id for context
+                const urlParams = new URLSearchParams(window.location.search);
+                const outletId = urlParams.get('outlet_id');
+                let url = `/api/orders/track/?token=${token}`;
+                if (outletId) url += `&outlet_id=${outletId}`;
+
+                const response = await fetch(url);
                 const data = await response.json();
 
                 if (response.ok) {
                     showStatus(`Order Status: <strong>${data.status}</strong>`, 'success');
+
+                    // Enable Chat if track is successful
+                    if (typeof initChat === 'function') {
+                        initChat(token);
+                        document.getElementById('toggle-chat-btn').style.display = 'block';
+                    }
                 } else {
                     showStatus(data.detail || 'Order not found.', 'error');
                 }
@@ -195,10 +207,18 @@
             fetchOrderStatus(tokenInput.value);
         });
 
-        // Auto-tracking logic
+        // Auto-tracking logic with Strict Context
         window.addEventListener('DOMContentLoaded', () => {
             const urlParams = new URLSearchParams(window.location.search);
             const token = urlParams.get('token');
+            const outletId = urlParams.get('outlet_id');
+
+            // Strict Check -> Redirect to Selection
+            if (!outletId) {
+                console.warn("Outlet ID missing, redirecting to selection page...");
+                window.location.href = '/food-flash/';
+                return;
+            }
 
             if (token) {
                 tokenInput.value = token;
@@ -213,6 +233,9 @@
                     initChat(token);
                     document.getElementById('toggle-chat-btn').style.display = 'block';
                 }
+            } else {
+                // Static Mode (Outlet Context Only) - Just let the input form show
+                console.log("Static Mode: Outlet " + outletId);
             }
         });
 
@@ -338,7 +361,12 @@
         async function fetchMessages() {
             if (!currentToken) return;
             try {
-                const response = await fetch(`/api/orders/chat/${currentToken}/?t=${new Date().getTime()}`);
+                const urlParams = new URLSearchParams(window.location.search);
+                const outletId = urlParams.get('outlet_id');
+                let url = `/api/orders/chat/${currentToken}/?t=${new Date().getTime()}`;
+                if (outletId) url += `&outlet_id=${outletId}`;
+
+                const response = await fetch(url);
                 if (response.ok) {
                     const messages = await response.json();
                     renderMessages(messages);
@@ -367,7 +395,12 @@
             if (!text || !currentToken) return;
 
             try {
-                const response = await fetch(`/api/orders/chat/${currentToken}/`, {
+                const urlParams = new URLSearchParams(window.location.search);
+                const outletId = urlParams.get('outlet_id');
+                let url = `/api/orders/chat/${currentToken}/`;
+                if (outletId) url += `?outlet_id=${outletId}`;
+
+                const response = await fetch(url, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ sender: 'CUSTOMER', message: text })

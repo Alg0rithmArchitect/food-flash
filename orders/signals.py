@@ -4,6 +4,8 @@ from .models import Order, PushSubscription
 from pywebpush import webpush, WebPushException
 import json
 import os
+import threading
+from django.db import connection
 
 @receiver(pre_save, sender=Order)
 def track_order_status_change(sender, instance, **kwargs):
@@ -20,35 +22,9 @@ def track_order_status_change(sender, instance, **kwargs):
     else:
         instance._original_status = None
 
-@receiver(post_save, sender=Order)
-def send_order_status_notification(sender, instance, created, **kwargs):
-    """
-    Trigger a push notification when the order status changes.
-    """
-    if created:
-        return  # Don't send notification on creation
 
-    # Check if status changed
-    original_status = getattr(instance, '_original_status', None)
-    
-    if original_status == instance.status:
-        return  # Status didn't change, do nothing
 
-    # Define messages for each status
-    status_messages = {
-        'PREPARING': "Your order is being prepared",
-        'READY': "Your order is ready for pickup!",
-        'DELIVERED': "Thank you for ordering with Food Flash",
-        'CANCELLED': "Your order has been cancelled"
-    }
 
-    message_text = status_messages.get(instance.status)
-
-    if not message_text:
-        return  # Status not in our notification list
-
-import threading
-from django.db import connection
 
 def send_push_async(token_number, message_text, status):
     """

@@ -1,4 +1,21 @@
+from django.conf import settings
 from django.db import models
+
+class Outlet(models.Model):
+    name = models.CharField(max_length=100)
+    restaurant_name = models.CharField(max_length=100, blank=True, null=True)
+    android_tv_device_id = models.CharField(max_length=100, blank=True, null=True, help_text="Azure IoT Device ID for this outlet's TV")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return self.name
+
+class OutletManager(models.Model):
+    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    outlet = models.ForeignKey(Outlet, on_delete=models.CASCADE)
+
+    def __str__(self):
+        return f"{self.user.username} - {self.outlet.name}"
 
 class Order(models.Model):
     STATUS_CHOICES = [
@@ -8,6 +25,7 @@ class Order(models.Model):
         ('CANCELLED', 'Cancelled'),
     ]
 
+    outlet = models.ForeignKey(Outlet, on_delete=models.CASCADE, null=True, blank=True, related_name='orders')
     token_number = models.PositiveIntegerField()
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PREPARING')
     is_called = models.BooleanField(default=False)
@@ -15,7 +33,8 @@ class Order(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):
-        return f"Order {self.token_number} - {self.status}"
+        outlet_name = self.outlet.name if self.outlet else "No Outlet"
+        return f"Order {self.token_number} - {self.status} ({outlet_name})"
 
 class PushSubscription(models.Model):
     token_number = models.PositiveIntegerField()

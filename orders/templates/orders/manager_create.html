@@ -108,11 +108,38 @@
                 });
 
                 if (res.ok) {
-                    const trackingUrl = `${window.location.origin}/food-flash/track/?token=${token}`;
+                    const outletId = "{{ outlet_id|default_if_none:'' }}";
+                    const serverIp = "{{ server_ip|default_if_none:'' }}";
+                    const publicUrl = "{{ public_url|default_if_none:'' }}";
+
+                    let baseUrl = window.location.origin;
+
+                    // Priority 1: Automated Internet Tunnel (Works everywhere)
+                    if (publicUrl && publicUrl !== 'None') {
+                        baseUrl = publicUrl;
+                    }
+                    // Priority 2: Upgrade Localhost to LAN IP (Best for Local Wi-Fi)
+                    else if (baseUrl.includes('localhost') || baseUrl.includes('127.0.0.1')) {
+                        if (serverIp && serverIp !== 'None' && serverIp !== '127.0.0.1') {
+                            baseUrl = `http://${serverIp}:8000`;
+                        }
+                    }
+
+                    let trackingUrl = `${baseUrl}/food-flash/track/?token=${token}`;
+                    if (outletId && outletId !== 'None') {
+                        trackingUrl += `&outlet_id=${outletId}`;
+                    }
 
                     document.getElementById('result').style.display = 'block';
                     document.getElementById('qr-placeholder').innerHTML = `<img src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(trackingUrl)}" alt="QR Code">`;
-                    document.getElementById('link-text').innerText = trackingUrl;
+
+                    const linkBox = document.getElementById('link-text');
+                    linkBox.innerHTML = ''; // Clear previous
+                    const anchor = document.createElement('a');
+                    anchor.href = trackingUrl;
+                    anchor.target = "_blank";
+                    anchor.innerText = trackingUrl;
+                    linkBox.appendChild(anchor);
                 } else {
                     const err = await res.json();
                     alert("Error: " + (err.token_number ? "Token already exists." : "Failed to create."));

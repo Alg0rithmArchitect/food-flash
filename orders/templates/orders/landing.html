@@ -85,20 +85,78 @@
     </div>
 
     <script>
+        // Parse outlet_id from URL
+        const urlParams = new URLSearchParams(window.location.search);
+        const outletId = urlParams.get('outlet_id');
+
+        // Logic: If no Outlet ID, show selection list
+        if (!outletId) {
+            document.querySelector('.card').innerHTML = `
+                <h1>Select Store 🏪</h1>
+                <p>Please choose your outlet:</p>
+                <div id="outlet-list" style="text-align:left;">
+                    <p style="text-align:center;">Loading outlets...</p>
+                </div>
+            `;
+            fetchOutlets();
+        }
+
+        async function fetchOutlets() {
+            try {
+                const response = await fetch('/api/orders/outlets/');
+                const outlets = await response.json();
+
+                const list = document.getElementById('outlet-list');
+                list.innerHTML = ''; // Clear loading
+
+                if (outlets.length === 0) {
+                    list.innerHTML = '<p style="text-align:center;">No outlets found.</p>';
+                } else {
+                    outlets.forEach(outlet => {
+                        const div = document.createElement('div');
+                        div.style.padding = '15px';
+                        div.style.margin = '10px 0';
+                        div.style.background = '#f8f9fa';
+                        div.style.borderRadius = '8px';
+                        div.style.cursor = 'pointer';
+                        div.style.border = '1px solid #eee';
+                        div.style.display = 'flex';
+                        div.style.justifyContent = 'space-between';
+                        div.style.alignItems = 'center';
+                        div.innerHTML = `<strong>${outlet.name}</strong> <span style="color:#888;">${outlet.restaurant_name || ''}</span>`;
+                        div.onclick = () => selectOutlet(outlet.id);
+                        list.appendChild(div);
+                    });
+                }
+            } catch (error) {
+                console.error('Error loading outlets:', error);
+                document.getElementById('outlet-list').innerHTML = '<p style="color:red; text-align:center;">Failed to load outlets.</p>';
+            }
+        }
+
+        function selectOutlet(id) {
+            window.location.href = `/food-flash/track/?outlet_id=${id}`;
+        }
+
         function trackOrder() {
             const token = document.getElementById('token-input').value;
-            if (token) {
-                // Redirect to the tracking URL
-                window.location.href = `/food-flash/track/?token=${token}`;
-            } else {
+            if (token && outletId) {
+                // Redirect to the tracking URL with outlet_id
+                window.location.href = `/food-flash/track/?token=${token}&outlet_id=${outletId}`;
+            } else if (!token) {
                 alert("Please enter a token number.");
+            } else if (!outletId) {
+                alert("Unexpected state: Outlet ID missing during tracking.");
             }
         }
 
         // Allow enter key
-        document.getElementById('token-input').addEventListener('keypress', function (e) {
-            if (e.key === 'Enter') trackOrder();
-        });
+        const input = document.getElementById('token-input');
+        if (input) {
+            input.addEventListener('keypress', function (e) {
+                if (e.key === 'Enter') trackOrder();
+            });
+        }
     </script>
 
 </body>
