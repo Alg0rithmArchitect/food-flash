@@ -37,9 +37,8 @@ def track_order(request):
         order = None
         if outlet_id:
             order = Order.objects.filter(token_number=token, outlet_id=outlet_id).first()
-        
-        if not order:
-            # Fallback: search globally for this token
+        else:
+            # Only fallback if NO outlet was specified at all
             order = Order.objects.filter(token_number=token).order_by('-created_at').first()
             
         if not order:
@@ -130,7 +129,7 @@ def manager_dashboard(request):
     return redirect('manager_menu')
 
 def track_order_page(request):
-    return render(request, 'orders/track_order.html')
+    return render(request, 'orders/index.html')
 
 def service_worker(request):
     from django.shortcuts import render

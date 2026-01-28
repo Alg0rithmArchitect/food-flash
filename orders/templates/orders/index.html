@@ -1,0 +1,108 @@
+{% extends "layouts/base.html" %}
+{% load static %}
+{% block body_class %}fixed-body{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'orders/css/styles.css' %}">
+<link rel="stylesheet" href="{% static 'orders/css/home_footer.css' %}">
+<link rel="stylesheet" href="{% static 'orders/css/outlet_selection.css' %}">
+<link rel="stylesheet" href="{% static 'orders/css/food_status.css' %}">
+
+{% if PROJECT_NAME == 'airline_flash' %}
+<link rel="stylesheet" href="{% static 'orders/css/flight_status.css' %}">
+{% endif %}
+{% if PROJECT_NAME == 'dine_flash'%}
+<link rel="stylesheet" href="{% static 'orders/css/dineflash/booking_choice.css' %}">
+<link rel="stylesheet" href="{% static 'orders/css/dineflash/dine_status.css' %}">
+<link rel="stylesheet" href="{% static 'orders/css/dineflash/thank_you.css' %}">
+{% endif %}
+
+{% endblock %}
+
+{% block content %}
+<!-- Branding Bar -->
+<div class="branding-bar"
+    style="position: fixed; top: 0; left: 0; right: 0; height: 50px; background: #fff; z-index: 1001; display: flex; align-items: center; justify-content: center; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+    <h1
+        style="color: #c8a97e; font-weight: 700; margin: 0; font-family: 'Playfair Display', serif; font-size: 22px; text-transform: uppercase;">
+        FOOD FLASH</h1>
+</div>
+
+<!-- Header and Slider (Fixed) -->
+<div class="header-bar flex-shrink-0"
+    style="display: flex; align-items: center; justify-content: space-between; padding-right: 15px;">
+    <!-- Scrollable Outlets Area -->
+    <div id="vendor-logo-bar" class="align-items-center px-3 pt-2"
+        style="display: flex; flex-direction: row; overflow-x: auto; flex-grow: 1; margin-right: 10px; border-bottom: none; scrollbar-width: none;">
+        <!-- Dynamic Outlets Container -->
+        <div id="vendor-list-container" class="d-flex flex-row"
+            style="gap: 12px; display: flex; flex-direction: row; align-items: center;"></div>
+    </div>
+
+    <!-- Fixed Plus Button at the Right Edge -->
+    <div class="add-btn-wrapper flex-shrink-0">
+        <button id="add-outlet-btn" class="btn add-outlet-btn" type="button">+</button>
+    </div>
+</div>
+<!-- Ad Slider Ignored as per instructions -->
+<!-- <div id="ad-slider-wrapper" class="ad-slider flex-shrink-0 px-3 pt-2">
+    <div id="ad-slider" class="ad-track"></div>
+</div> -->
+
+<div class="page-wrapper">
+
+
+    <!-- Scrollable Chat Area -->
+    <div class="chat-response px-1" id="chat-container">
+        <!-- Dynamic chat messages go here -->
+    </div>
+</div>
+
+<!-- Footer (Fixed) -->
+<div class="chat-footer px-3 pt-2 pb-2">
+    <div class="d-flex ">
+        <input type="text" inputmode="numeric" id="chat-input" class="form-control rounded-pill me-2" placeholder="{% if PROJECT_NAME == 'airline_flash' %}Enter your Sequence Code
+                    {% elif PROJECT_NAME == 'dine_flash' %}Enter your Booking No
+                    {% else %}Enter Your Token Number
+                    {% endif %}">
+        <button id="send-button" class="btn rounded-pill d-flex align-items-center justify-content-center">
+            <i class="fas fa-paper-plane"></i>
+        </button>
+    </div>
+</div>
+{% block footer %}
+<footer class="premium-footer">
+    <div class="footer-content">
+        <div class="footer-button menu-btn">
+            <div class="btn-icon-wrapper">
+                <div class="icon-bg"></div>
+                <i class="fas fa-utensils footer-icon"></i>
+            </div>
+            <span class="footer-text">Menu</span>
+        </div>
+
+        <div class="footer-button rating-btn">
+            <div class="btn-icon-wrapper">
+                <div class="icon-bg"></div>
+                <i class="fas fa-star footer-icon"></i>
+            </div>
+            <span class="footer-text">Rating</span>
+        </div>
+
+        <div class="footer-button feedback-btn">
+            <div class="btn-icon-wrapper">
+                <div class="icon-bg"></div>
+                <i class="fas fa-comment-alt footer-icon"></i>
+            </div>
+            <span class="footer-text">Feedback</span>
+        </div>
+    </div>
+</footer>
+{% endblock %}
+<!-- Modals -->
+{% include "orders/partials/base_modals.html" %}
+{% include "orders/partials/index_modals.html" %}
+{% endblock %}
+
+{% block extra_js %}
+{% endblock %}
