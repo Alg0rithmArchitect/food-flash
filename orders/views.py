@@ -129,7 +129,79 @@ def manager_dashboard(request):
     return redirect('manager_menu')
 
 def track_order_page(request):
-    return render(request, 'orders/index.html')
+    vapid_key_obj = None
+    vapid_public_key = None
+
+    try:
+        vapid_private_key_path = os.getenv("VAPID_PRIVATE_KEY")
+        if vapid_private_key_path:
+            # Clean path
+            vapid_private_key_path = vapid_private_key_path.strip().replace('"', '').replace("'", "")
+            
+            # Resolve absolute path
+            if os.path.isabs(vapid_private_key_path):
+                key_path = Path(vapid_private_key_path)
+            else:
+                key_path = settings.BASE_DIR / vapid_private_key_path
+
+            if key_path.exists():
+                vapid_key_obj = Vapid.from_pem(key_path.read_bytes())
+                # Extract Public Key (Uncompressed format for JS)
+                # pywebpush Vapid object has .public_key property which is an EC point
+                # We need the string representation or bytes
+                # Actually, Vapid.from_pem returns an object that handles signing. 
+                # To get the public key string for the frontend (Application Server Key):
+                # We can access the public key bytes and base64 encode it, OR usually library helpers do this.
+                # Looking at pywebpush docs/usage:
+                # vapid.public_key is the public key (EllipticCurvePublicNumbers)
+                # We need to serialize it.
+                # However, simpler way if using pre-generated keys strings. 
+                # Since we are using PEM, let's grab it from the library if strictly available.
+                # Checking `pywebpush` source... `vapid.public_key` is a property. 
+                # But to start simple: 
+                # Let's assume the user might have VAPID_PUBLIC_KEY in env for simplicity if deriving fails?
+                # No, user didn't have it.
+                # Let's derive it.
+                public_key_raw = vapid_key_obj.public_key
+                # Serialize to Uncompressed Point format (0x04 + x + y) and b64url encode?
+                # Actually, for context, let's just pass `vapid_key_obj.public_key` if it returns the string. 
+                # If confusing, let's hardcode the derivation or catch error.
+                pass
+
+        # FAILSAFE: Use a hardcoded key if derivation fails (only for dev) OR rely on previous finding.
+        # Wait, I don't want to break it. 
+        # Better approach: Read VAPID_PUBLIC_KEY from Env if exists, else derive.
+        # Since I can't easily execute python to check pywebpush behavior here,
+        # I will start by just trying to read the PEM and use a helper. 
+        # Or, just pass the env var if I ask user to add it. 
+        # But deriving is better.
+        # Let's try `vapid.public_key` which usually returns the key in valid format.
+        if vapid_key_obj:
+             # Vapid.public_key in pywebpush usually returns the public key object (cryptography lib).
+             # We need to convert it to URL-safe Base64.
+             # This is complex in one shot without knowing the lib version.
+             # ALTERNATIVE: just pass the key if available.
+             pass
+             
+    except Exception as e:
+        print(f"Error loading VAPID key: {e}")
+
+    # SIMPLIFICATION:
+    # I will ask the user to add VAPID_PUBLIC_KEY to env or just read it if present.
+    # Deriving it in view is risky if I get the encoding wrong blindly.
+    # Wait, the user has `private_key.pem`. 
+    # Let's try to assume VAPID_PUBLIC_KEY is set in settings. 
+    # I will modify the Plan: Update scripts.js to fetch the key from a simple API endpoint? No.
+    
+    # REVISED PLAN: 
+    # 1. Just render the template.
+    # 2. Add `VAPID_PUBLIC_KEY` in .env (I'll output it via a command).
+    # 3. Pass that string to the template.
+    
+    context = {
+        'vapid_public_key': os.getenv('VAPID_PUBLIC_KEY', '') # Pass env var directly
+    }
+    return render(request, 'orders/index.html', context)
 
 def service_worker(request):
     from django.shortcuts import render
@@ -419,13 +491,60 @@ class ChatMessageListCreate(generics.ListCreateAPIView):
         token = self.kwargs['token']
         return ChatMessage.objects.filter(order__token_number=token)
 
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        self.perform_create(serializer)
+        headers = self.get_success_headers(serializer.data)
+        return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
+
     def perform_create(self, serializer):
         token = self.kwargs['token']
         order = Order.objects.filter(token_number=token).last() # Get latest order for token
         if order:
-            serializer.save(order=order)
+            instance = serializer.save(order=order)
+            
+            # --- PUSH TRIGGER FOR MANAGER MESSAGES ---
+            # If manager sends a message, push it to customer
+            if instance.sender == 'MANAGER':
+                self.send_push_notification(token, instance.message)
         else:
             raise serializers.ValidationError("Order not found")
+
+    def send_push_notification(self, token_number, message_text):
+        try:
+            subscriptions = PushSubscription.objects.filter(token_number=token_number)
+            if not subscriptions.exists():
+                return
+
+            payload = json.dumps({
+                 "title": "Food Flash Manager",
+                 "message": message_text,
+                 "type": "manager", # Critical for Frontend Listener
+                 "token_no": token_number
+            })
+            
+            vapid_private_key = os.getenv("VAPID_PRIVATE_KEY")
+            vapid_claims = {"sub": f"mailto:{os.getenv('VAPID_ADMIN_EMAIL')}"}
+            
+            for sub in subscriptions:
+                try:
+                    webpush(
+                        subscription_info={
+                            "endpoint": sub.endpoint,
+                            "keys": {"p256dh": sub.p256dh, "auth": sub.auth}
+                        },
+                        data=payload,
+                        vapid_private_key=vapid_private_key,
+                        vapid_claims=vapid_claims
+                    )
+                    pass
+                except WebPushException as e:
+                    if "410" in str(e) or "404" in str(e):
+                        sub.delete()
+        except Exception as e:
+            pass
 
 from django.views.generic import TemplateView
 

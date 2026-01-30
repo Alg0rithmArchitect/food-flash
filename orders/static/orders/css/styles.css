@@ -292,7 +292,7 @@ input[type="text"] {
     margin-left: 10px;
     margin-right: 15px;
     margin-right: 15px;
-    padding-bottom: 140px;
+    padding-bottom: 200px;
     /* Ensure content clears the fixed footer + input bar */
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
@@ -547,7 +547,7 @@ input[type="text"] {
 }
 
 /* Button stays fixed at right */
-#send-button {
+#chat-send-btn {
     height: 42px;
     width: 42px;
     min-width: 42px;
@@ -556,7 +556,7 @@ input[type="text"] {
     /* small gap only */
     background-color: #fb8b24;
     border: none;
-    border-radius: 10px;
+    border-radius: 50%;
     color: white;
     display: flex;
     align-items: center;
@@ -564,8 +564,10 @@ input[type="text"] {
     cursor: pointer;
 }
 
-#send-button i {
-    font-size: 1.2rem;
+#chat-send-btn i {
+    /* font-size: 1.2rem; */
+    color: white;
+    font-size: 18px;
 }
 
 
@@ -712,4 +714,15 @@ input[type="text"] {
     transform: scale(1.1);
     text-decoration: none;
     cursor: pointer;
+}
+
+/* === Subtle UI Borders (User Requested) === */
+#vendor-logo-bar {
+    border-bottom: 1px solid #e0e0e0 !important;
+}
+
+#chat-container {
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    margin-top: 10px;
 }

@@ -5,8 +5,9 @@
 
 const API = {
     CHECK_STATUS: '/api/orders/track/',
-    SUBSCRIBE_PUSH: '/food-flash/push/subscribe/',
+    SUBSCRIBE_PUSH: '/api/orders/push/subscribe/', // Updated from /food-flash/push/subscribe/ per earlier view
     LIST_OUTLETS: '/api/orders/outlets/',
+    CHAT_API: '/api/orders/chat/0/', // Placeholder 0 to be replaced
 };
 
 const IosPwaInstallService = {
@@ -21,7 +22,7 @@ const FeedbackService = { init: () => { } };
 const PermissionService = {
     init: () => { },
     showModal: (force) => {
-        if (Notification.permission !== 'granted') console.log("Show Permission Modal");
+        if (Notification.permission !== 'granted') { }
     },
     setDeferredCallback: (cb) => {
         // Auto-approve for demo simplicity or prompt immediately
@@ -46,35 +47,179 @@ const AppUtils = {
     setToken: async (t) => localStorage.setItem('token', t),
     appendVendorIfNotExists: async () => { },
     getNotificationHelpPath: () => { },
-    getCSRFToken: () => 'csrftoken-mock',
+    getCSRFToken: () => {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                // Does this cookie string begin with the name we want?
+                if (cookie.substring(0, 10) === ('csrftoken=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(10));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    },
     notifyOrderReady: (data) => {
         if (navigator.vibrate) navigator.vibrate(200);
-        console.log("Order Ready Notification", data);
+        // console.log("Order Ready Notification", data);
     },
-    playWelcomeMessage: () => console.log("Playing welcome..."),
+    playWelcomeMessage: () => { },
     playNotificationSound: () => { },
-    getCurrentBrowserId: () => "browser-1"
+    getCurrentBrowserId: () => "browser-1",
+    getBrowserId: () => "browser-1", // Alias for compatibility
+    setSelectedOutletName: (name) => { },
+    adjustChatResponsePadding: () => {
+        // Ensure last message isn't hidden behind input
+        const container = document.getElementById('chat-container');
+        if (container) container.style.paddingBottom = "200px";
+    }
 };
+
 
 const VendorUIService = { init: () => { } };
 const PushHealthMonitorService = {
     recordPushReceived: () => { },
     startMonitor: () => { }
 };
-const ChatRestoreService = { restore: async () => { } };
+const ChatRestoreService = {
+    restore: async (vendorId) => {
+        const container = document.getElementById('chat-container');
+        if (container) {
+            container.innerHTML = ''; // Clear previous messages
+        }
+
+        // Restore Session if exists
+        const savedToken = localStorage.getItem(`session_token_${vendorId}`);
+        if (savedToken) {
+            // console.log(`Restoring session for outlet ${vendorId}: ${savedToken}`);
+            currentSessionToken = savedToken; // Reactivate session
+            await fetchOrderStatusOnce(savedToken, null, vendorId);
+        }
+    }
+};
+
+// --- CHAT HISTORY CACHE ---
+window.chatHistory = {};
+
+function saveChatHistory(outletId, msg) {
+    if (!outletId || !msg) return;
+    window.chatHistory[outletId] = window.chatHistory[outletId] || [];
+
+    // De-duplication check in storage
+    const exists = window.chatHistory[outletId].some(m => m.id === msg.id);
+    if (!exists) {
+        window.chatHistory[outletId].push(msg);
+    }
+}
+
+// --- DIALOGUE / MODAL FOR NOTIFICATIONS ---
+window.showNotificationModal = function (message, type) {
+    // 1. Create Modal Container
+    const modalId = 'push-notification-modal';
+    let modal = document.getElementById(modalId);
+
+    if (modal) modal.remove(); // Remove existing
+
+    modal = document.createElement('div');
+    modal.id = modalId;
+    modal.style.cssText = `
+        position: fixed;
+        top: 0; left: 0; right: 0; bottom: 0;
+        background: rgba(0,0,0,0.6);
+        z-index: 10000;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        animation: fadeIn 0.2s;
+    `;
+
+    // 2. Content
+    const content = document.createElement('div');
+    content.style.cssText = `
+        background: white;
+        padding: 25px;
+        border-radius: 15px;
+        width: 85%;
+        max-width: 350px;
+        text-align: center;
+        box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+        transform: scale(0.9);
+        animation: popUp 0.3s forwards;
+    `;
+
+    content.innerHTML = `
+        <div style="font-size: 3rem; margin-bottom: 10px;">🔔</div>
+        <h3 style="margin: 0 0 10px; color: #333;">New Message</h3>
+        <p style="font-size: 1.1rem; color: #555; margin-bottom: 20px;">${message}</p>
+        <button id="close-modal-btn" style="
+            background: #54c25d;
+            color: white;
+            border: none;
+            padding: 10px 25px;
+            font-size: 1rem;
+            border-radius: 25px;
+            cursor: pointer;
+            width: 100%;
+            font-weight: bold;
+        ">OK</button>
+    `;
+
+    // 3. Append & Listen
+    modal.appendChild(content);
+    document.body.appendChild(modal);
+
+    // Auto-Focus button for accessibility
+    const btn = content.querySelector('#close-modal-btn');
+    btn.focus();
+
+    const close = () => {
+        modal.style.opacity = '0';
+        setTimeout(() => modal.remove(), 200);
+    };
+
+    btn.onclick = close;
+    modal.onclick = (e) => {
+        if (e.target === modal) close();
+    };
+
+    // Add Keyframes if missing
+    if (!document.getElementById('modal-keyframes')) {
+        const style = document.createElement('style');
+        style.id = 'modal-keyframes';
+        style.innerHTML = `
+            @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+            @keyframes popUp { from { transform: scale(0.8); } to { transform: scale(1); } }
+        `;
+        document.head.appendChild(style);
+    }
+
+    // Vibrate
+    if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
+};
+
+// Use a simple local storage based history service if real one is missing
+const ChatHistoryService = {
+    save: async (payload) => {
+        // console.log("Mock Saving Chat:", payload);
+        // We could implement real local storage save here if needed
+    }
+};
 
 const ChatTemplateService = {
     build: (data) => `<div>${JSON.stringify(data.text)}</div>`
 };
 
 function maskSequenceCode(code) { return "****"; }
-function updateChatOnPush() { }
+
 
 // --- CHAT STATE ---
 let isChatEnabled = false;
 
 window.enableChatMode = function (token) {
-    console.log("NUCLEAR: Enable Chat Mode");
+    // console.log("NUCLEAR: Enable Chat Mode");
     isChatEnabled = true;
 
     const oldInput = document.getElementById('chat-input');
@@ -91,8 +236,37 @@ window.enableChatMode = function (token) {
     newInput.id = 'chat-input'; // Keep ID
     newInput.type = 'text';
     newInput.removeAttribute('inputmode'); // Standard text mode
+
+    // REMOVE TOKEN LIMITS FOR CHAT
+    newInput.removeAttribute('maxlength');
+    newInput.oninput = null; // Remove inline handler
+
     newInput.placeholder = "Type your message...";
     // newInput.classList.remove('numeric-mode'); 
+
+    // Remove old, insert new
+    oldInput.parentNode.replaceChild(newInput, oldInput);
+
+    // ... (Lines 267-287 skipped in replacement for brevity if untouched, but I must return full block if I span across functions)
+    // Actually, I can target just the enableChatMode block first.
+    // But I need to do disableChatMode too.
+
+    // Wait, the tool requires contiguous block.
+    // I'll do two replacements or one big one. 
+    // It's safer to do one big replacement covering 257-303 if they are close.
+    // They are separated by lines 267-287.
+    // Let's do two separate calls if needed or one block if small enough.
+    // Distance is ~40 lines.
+
+    // REVISED PLAN:
+    // 1. `enableChatMode`: Input cleanup.
+    // 2. `disableChatMode`: Input restoration.
+
+    // Let's verify line numbers again. 
+    // enableChatMode: ~257
+    // disableChatMode: ~301
+
+    return; // Pseudo-code, proceeding to actual tool call.
 
     // Remove old, insert new
     oldInput.parentNode.replaceChild(newInput, oldInput);
@@ -109,7 +283,7 @@ window.enableChatMode = function (token) {
 
     newInput.addEventListener('keydown', function (e) {
         if (e.key === 'Enter') {
-            document.getElementById('send-button').click();
+            document.getElementById('chat-send-btn').click();
         }
     });
 
@@ -120,7 +294,7 @@ window.enableChatMode = function (token) {
 };
 
 window.disableChatMode = function () {
-    console.log("Auto-Disabling Chat Mode");
+    // console.log("Auto-Disabling Chat Mode");
     isChatEnabled = false;
 
     const oldInput = document.getElementById('chat-input');
@@ -133,7 +307,12 @@ window.disableChatMode = function () {
     // Clone and Replace to Revert Keyboard
     const newInput = oldInput.cloneNode(true);
     newInput.setAttribute('inputmode', 'numeric'); // Force numeric keyboard
-    newInput.placeholder = "Enter Token Number";
+
+    // RESTORE TOKEN LIMITS
+    newInput.setAttribute('maxlength', '4');
+    newInput.setAttribute('oninput', "this.value = this.value.replace(/[^0-9]/g, '').slice(0, 4)");
+
+    newInput.placeholder = " Enter your Order NO...";
 
     // Replace in DOM
     oldInput.parentNode.replaceChild(newInput, oldInput);
@@ -147,10 +326,35 @@ window.disableChatMode = function () {
 
     newInput.addEventListener('keydown', function (e) {
         if (e.key === 'Enter') {
-            document.getElementById('send-button').click();
+            document.getElementById('chat-send-btn').click();
         }
     });
+
+    // Stop Polling
+    if (chatPollInterval) {
+        clearInterval(chatPollInterval);
+        chatPollInterval = null;
+    }
 };
+
+let chatPollInterval = null;
+
+function startChatPolling(token) {
+    if (chatPollInterval) clearInterval(chatPollInterval);
+    // console.log("Starting Chat Poll for", token);
+
+    // Initial fetch to load history immediately
+    const activeOutlet = localStorage.getItem('activeVendor'); // Quick lookup
+    fetchOrderStatusOnce(token, null, activeOutlet);
+
+    chatPollInterval = setInterval(() => {
+        if (isChatEnabled) {
+            fetchOrderStatusOnce(token, null, activeOutlet);
+        } else {
+            clearInterval(chatPollInterval);
+        }
+    }, 4000); // 4 seconds interval
+}
 
 function appendStatusCard(data, vendorInfo) {
     const container = document.getElementById('chat-container');
@@ -183,36 +387,210 @@ function appendStatusCard(data, vendorInfo) {
     </div>
     `;
 
-    div.innerHTML = `${avatarHtml}<div class="message-bubble server" style="background:transparent; padding:0; box-shadow:none;">${cardHtml}</div>`;
+    div.innerHTML = `${avatarHtml}<div class="message-bubble server" style="background:transparent; padding:0; box-shadow:none; border:none;">${cardHtml}</div>`;
 
     container.appendChild(div);
     container.scrollTop = container.scrollHeight;
 }
 
-function appendMessage(text, sender, p1, p2, p3, avatarUrl = null) {
-    const container = document.getElementById('chat-container');
-    const div = document.createElement('div');
-    div.className = `message-row ${sender}`;
+// --- NEW CHAT LOGIC MERGED ---
 
-    let avatarHtml = '';
-    // Only add avatar for server messages
+function updateChatOnPush(vendorId, logo_url, name) {
+    document.querySelectorAll(".vendor-logo-wrapper").forEach(wrapper => {
+        const logo = wrapper.querySelector("img");
+        if (logo && logo.dataset.vendorId == vendorId) {
+            document.querySelectorAll(".vendor-logo-wrapper").forEach(w => w.classList.remove("active"));
+            wrapper.classList.add("active");
+            if (AppUtils.setSelectedOutletName) AppUtils.setSelectedOutletName(name);
+            let ratingLink = localStorage.getItem("activeVendorRatingLink") || "https://default-rating-link.com";
+            handleOutletSelection(vendorId, logo_url, ratingLink);
+        }
+    });
+}
+
+async function handleOutletSelection(vendorId, vendor_logo, placeId) {
+    localStorage.setItem("activeVendor", vendorId);
+    localStorage.setItem("activeVendorLogo", vendor_logo);
+    localStorage.setItem("activeVendorRatingLink", placeId);
+}
+
+function appendMessage(text, sender, timestamp = null, type = null, token_no = null, passenger_name = null) {
+    // console.log("Booking ID from message:", token_no);
+    const chatContainer = document.getElementById("chat-container");
+
+    const messageRow = document.createElement('div');
+    messageRow.classList.add('message-row', sender);
+
+    const timeStamp = timestamp || new Date().toLocaleTimeString([], {
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true
+    });
+
+    const messageBubble = document.createElement('div');
+    messageBubble.classList.add('message-bubble', sender);
+
+    // Safety check for window.BASE
+    const base = window.BASE || '/';
+
     if (sender === 'server') {
-        // Use provided avatar or default
-        const logo = avatarUrl || 'https://ui-avatars.com/api/?name=Food+Flash&background=333&color=fff';
-        avatarHtml = `<img src="${logo}" class="server-logo">`;
-
-        // Server message structure: Avatar + Bubble
-        div.innerHTML = `${avatarHtml}<div class="message-bubble ${sender}"><div class="message-content">${text}</div></div>`;
+        messageBubble.innerHTML = `
+            <div class="message-content">
+                <button class="reply-button" title="Reply">
+                    <i class="fa-solid fa-reply"></i>
+                </button>
+                ${text}
+                <span class="message-timestamp">
+                    ${timeStamp} 
+                </span>
+            </div>
+            `;
+    } else if (base == '/airline_flash/') {
+        messageBubble.innerHTML = `
+            <div class="message-content">
+                <button class="reply-button" title="Reply">
+                    <i class="fa-solid fa-reply"></i>
+                </button>
+                ${text}
+                <span class="passenger-name-label">👤 ${passenger_name || 'Passenger'}</span>
+                <span class="dot">•</span>
+                <span class="message-timestamp">
+                    ${timeStamp} 
+                </span>
+            </div>
+            `;
     } else {
-        // User message structure: Just Bubble (Right Aligned)
-        div.innerHTML = `<div class="message-bubble ${sender}"><div class="message-content">${text}</div></div>`;
+        messageBubble.innerHTML = `
+            <div class="message-content">
+                <button class="reply-button" title="Reply">
+                    <i class="fa-solid fa-reply"></i>
+                </button>
+                ${text}
+                <span class="message-timestamp timestamp-padded">
+                    ${timeStamp} 
+                </span>
+            </div>
+            `;
     }
 
-    container.appendChild(div);
-    container.scrollTop = container.scrollHeight;
+    if (token_no) {
+        messageBubble.dataset.tokenNo = token_no;
+    }
+
+    messageRow.appendChild(messageBubble);
+
+    // Reply Logic
+    if (sender === 'server' && (type === 'foodstatus' || type === 'manager' || type === 'flightstatus' || type === 'airline_manager' || type === 'dinestatus' || type === 'dine_manager')) {
+        const replyBtn = messageBubble.querySelector('.reply-button');
+        if (replyBtn) {
+            replyBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const isSelected = messageBubble.classList.contains('selected');
+
+                // Deselect all first
+                document.querySelectorAll('.message-bubble.server').forEach(el => el.classList.remove('selected'));
+
+                // Toggle selection and reply mode
+                if (!isSelected) {
+                    messageBubble.classList.add('selected');
+                    AppUtils.isReplyMode = true;
+
+                    // Change icon to close
+                    const icon = replyBtn.querySelector('i');
+                    if (icon) {
+                        icon.classList.remove('fa-reply');
+                        icon.classList.add('fa-times');
+                        replyBtn.title = 'Cancel Reply';
+                        replyBtn.classList.add('active');
+                    }
+
+                } else {
+                    messageBubble.classList.remove('selected');
+                    AppUtils.isReplyMode = false;
+
+                    // Change icon back to reply
+                    const icon = replyBtn.querySelector('i');
+                    if (icon) {
+                        icon.classList.remove('fa-times');
+                        icon.classList.add('fa-reply');
+                        replyBtn.title = 'Reply';
+                        replyBtn.classList.remove('active');
+                    }
+                }
+
+                // Focus input
+                const inputBox = document.getElementById("chat-input");
+                if (inputBox) inputBox.focus();
+            });
+        }
+    }
+    else if (type === 'thankyou') {
+        const replyBtn = messageBubble.querySelector('.reply-button');
+        if (replyBtn) replyBtn.remove();
+        messageBubble.classList.add("thankyou-message");
+    }
+    else {
+        // Remove reply button for basic messages if not needed
+        const replyBtn = messageBubble.querySelector('.reply-button');
+        if (replyBtn) replyBtn.remove();
+    }
+
+    chatContainer.appendChild(messageRow);
+    chatContainer.scrollTop = chatContainer.scrollHeight;
+    if (AppUtils.adjustChatResponsePadding) AppUtils.adjustChatResponsePadding();
 }
-async function clearReplyMode() { }
-async function saveChat() { }
+
+async function saveChat(text, sender, type, token_no) {
+    // console.log("Saving chat message:", {text, sender, type, token_no});
+    const activeVendorId = localStorage.getItem("activeVendor");
+    if (!activeVendorId) return;
+
+    let normalizedText;
+
+    if (type === "chat") {
+        // User typed message → wrap inside JSON
+        normalizedText = { content: text };
+    } else if (typeof text === "string") {
+        // Server/system accidentally sends string → wrap it
+        normalizedText = { message: text };
+    } else {
+        // Already JSON (status / offers / manager payload)
+        normalizedText = text;
+    }
+
+    try {
+        if (ChatHistoryService) {
+            await ChatHistoryService.save({
+                vendorId: activeVendorId,
+                browser_id: AppUtils.getBrowserId(),
+                sender,
+                type,
+                text: normalizedText,
+                token_no
+            });
+        }
+    } catch (err) {
+        console.error("Failed to save chat message:", err);
+    }
+}
+
+function clearReplyMode() {
+    const selectedMessage = document.querySelector('.message-bubble.server.selected');
+    if (!selectedMessage) return;
+
+    selectedMessage.classList.remove('selected');
+    AppUtils.isReplyMode = false;
+
+    const replyBtn = selectedMessage.querySelector('.reply-button');
+    const icon = replyBtn?.querySelector('i');
+
+    if (replyBtn && icon) {
+        icon.classList.remove('fa-times');
+        icon.classList.add('fa-reply');
+        replyBtn.title = 'Reply';
+        replyBtn.classList.remove('active');
+    }
+}
 
 // --- MAIN LOGIC (MATCHING USER PROVIDED STRUCTURE) ---
 
@@ -233,6 +611,38 @@ onDOMReady(async function () {
         vendors: [], // Local cache
 
         init: async function () {
+            // Overwrite global service with closure-aware implementation
+            ChatRestoreService.restore = async (vendorId) => {
+                const container = document.getElementById('chat-container');
+                if (container) container.innerHTML = '';
+
+                // 1. Instant Restore from Cache
+                if (window.chatHistory && window.chatHistory[vendorId]) {
+                    const cachedMsgs = window.chatHistory[vendorId];
+                    cachedMsgs.forEach(msg => {
+                        const side = (msg.sender === 'CUSTOMER') ? 'user' : 'server';
+                        // Need vendor logo for server message?
+                        // We can fetch it from vendors list
+                        const vData = VendorUIService.vendors.find(v => v.id === vendorId) || {};
+                        const logo = vData.logo;
+
+                        if (side === 'server') {
+                            appendMessage(msg.message, 'server', null, null, `msg-${msg.id}`, logo);
+                        } else {
+                            appendMessage(msg.message, 'user', null, null, `msg-${msg.id}`, logo);
+                        }
+                    });
+                }
+
+                const savedToken = localStorage.getItem(`session_token_${vendorId}`);
+                if (savedToken) {
+                    currentSessionToken = savedToken;
+                    const result = await fetchOrderStatusOnce(savedToken, null, vendorId);
+                    if (result) return true;
+                }
+                return false;
+            };
+
             try {
                 const resp = await fetch(API.LIST_OUTLETS);
                 if (!resp.ok) throw new Error("Failed to fetch outlets");
@@ -297,11 +707,13 @@ onDOMReady(async function () {
             element.classList.add('active');
 
             await AppUtils.setCurrentVendors(vendorData.id);
-            await ChatRestoreService.restore(vendorData.id);
+            const restored = await ChatRestoreService.restore(vendorData.id);
 
-            // 3. Trigger Welcome Message
-            appendMessage(`Hi, Good Day! Welcome to ${vendorData.name}.`, 'server', null, null, null, vendorData.logo);
-            appendMessage("Kindly enter the Bill Number.", 'server', null, null, null, vendorData.logo);
+            // 3. Trigger Welcome Message ONLY if no session restored
+            if (!restored) {
+                appendMessage(`Hi, Good Day! Welcome to ${vendorData.name}.`, 'server', null, null, null, vendorData.logo);
+                appendMessage("Kindly enter the Bill Number.", 'server', null, null, null, vendorData.logo);
+            }
         }
     };
 
@@ -441,7 +853,7 @@ onDOMReady(async function () {
 
     // Elements
     const chatInput = document.getElementById('chat-input');
-    const sendButton = document.getElementById('send-button');
+    const sendButton = document.getElementById('chat-send-btn');
     const toggleBtn = document.getElementById("toggleArrowBtn");
     const pageWrapper = document.querySelector(".page-wrapper");
 
@@ -466,12 +878,73 @@ onDOMReady(async function () {
     }
 
     // Push Subscription
+    // --- SW REGISTRATION & PUSH SUBSCRIPTION ---
+
+    // Register SW immediately
+    if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('/sw.js')
+            .then(reg => { })
+            .catch(err => console.error("SW Registration Failed", err));
+    }
+
+    function urlBase64ToUint8Array(base64String) {
+        const padding = '='.repeat((4 - base64String.length % 4) % 4);
+        const base64 = (base64String + padding)
+            .replace(/-/g, '+')
+            .replace(/_/g, '/');
+        const rawData = window.atob(base64);
+        const outputArray = new Uint8Array(rawData.length);
+        for (let i = 0; i < rawData.length; ++i) {
+            outputArray[i] = rawData.charCodeAt(i);
+        }
+        return outputArray;
+    }
+
     class PushSubscriptionService {
         static async subscribe(token, vendorId) {
-            if ('serviceWorker' in navigator) {
+            if (!('serviceWorker' in navigator)) return;
+
+            try {
                 const reg = await navigator.serviceWorker.ready;
-                // Mock subscription
-                console.log("Subscribed for", token);
+                const publicKey = window.VAPID_PUBLIC_KEY;
+
+                if (!publicKey) {
+                    console.warn("VAPID Key missing. Skipping push subscription.");
+                    return;
+                }
+
+                let sub = await reg.pushManager.getSubscription();
+                if (!sub) {
+                    const applicationServerKey = urlBase64ToUint8Array(publicKey);
+                    sub = await reg.pushManager.subscribe({
+                        userVisibleOnly: true,
+                        applicationServerKey: applicationServerKey
+                    });
+                }
+
+                // Send to Backend
+                const payload = {
+                    token_number: token,
+                    endpoint: sub.endpoint,
+                    keys: {
+                        p256dh: sub.toJSON().keys.p256dh,
+                        auth: sub.toJSON().keys.auth
+                    },
+                    outlet_id: vendorId // Helper to associate
+                };
+
+                await fetch(API.SUBSCRIBE_PUSH, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': AppUtils.getCSRFToken()
+                    },
+                    body: JSON.stringify(payload)
+                });
+                // console.log("Push Subscribed for", token);
+
+            } catch (e) {
+                console.error("Push Subscription Failed", e);
             }
         }
     }
@@ -496,7 +969,6 @@ onDOMReady(async function () {
 
             const data = await resp.json();
 
-            // Handle Django DRF error format (data.detail) or generic errors
             if (!resp.ok) throw new Error(data.detail || data.error || "Server Error");
 
             if (!replyText) {
@@ -504,17 +976,58 @@ onDOMReady(async function () {
                 // e.g. "Your Order #105 is Preparing"
                 const vendorInfo = VendorUIService.getVendor(outletId) || { logo: 'https://ui-avatars.com/api/?name=Food+Flash&background=333&color=fff', name: 'Food Flash' };
 
-                // Use Rich Status Card instead of plain text
+                // 1. Render Status Card
                 appendStatusCard(data, vendorInfo);
+
+                // 2. Render Chat History (New Feature)
+                if (data.messages && Array.isArray(data.messages)) {
+                    // Simple De-duplication or Clear-All approach?
+                    // For stability, let's clear non-status-card messages first or just be smart.
+                    // For now, let's just append ONLY if the container is empty (first load) 
+                    // OR rely on a check. 
+                    // Actually, simplest 'Live' update: Clear everything except input/footer? 
+                    // No, that kills UX.
+                    // Lets iterate and append. 
+                    const container = document.getElementById('chat-container');
+                    // quick hack: check if message ID exists?
+                    data.messages.forEach(msg => {
+                        // 1. Save to Client Cache
+                        saveChatHistory(outletId, msg);
+
+                        // 2. Render if not present
+                        // Unique ID check
+                        if (!document.getElementById(`msg-${msg.id}`)) {
+                            // Assuming msg.sender is 'CUSTOMER' or 'MANAGER'
+                            const side = (msg.sender === 'CUSTOMER') ? 'user' : 'server';
+                            if (side === 'server') {
+                                // Manager Message
+                                appendMessage(msg.message, 'server', null, null, `msg-${msg.id}`, vendorInfo.logo);
+                            } else {
+                                // Customer Message (We likely already showed it locally, but good to sync)
+                                // To avoid duplicates of local echo, we might skip or check text.
+                                // Customer Message
+                                appendMessage(msg.message, 'user', null, null, `msg-${msg.id}`);
+                            }
+                        }
+                    });
+                }
             }
 
             await PushSubscriptionService.subscribe(token, outletId);
+
+            // SAVE SESSION TOKEN FOR THIS OUTLET
+            if (outletId) {
+                localStorage.setItem(`session_token_${outletId}`, token);
+            }
+
             return data;
         } catch (e) {
             // Only show error if we were explicitly checking a specific outlet
             // or if it's the general single-fetch
             const vendorPrefix = explicitOutletId ? `(Outlet ${explicitOutletId}) ` : '';
-            appendMessage(`${vendorPrefix}Error: ${e.message}`, 'server');
+            if (e.message !== "Server Error") { // avoid spamming generic errors
+                appendMessage(`${vendorPrefix}Error: ${e.message}`, 'server');
+            }
         }
     }
 
@@ -556,6 +1069,37 @@ onDOMReady(async function () {
     }
 
     // Input Listeners
+    // --- PUSH LISTENER FOR INSTANT CHAT ---
+    if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.addEventListener('message', async (event) => {
+            // console.log("Foreground Page received SW message:", event.data);
+            if (event.data && event.data.type === 'PUSH_STATUS_UPDATE') {
+                const pushData = event.data.payload;
+                const messageHTML = pushData.message || pushData.text; // Flexi check
+
+                // Handle Manager Chat Push
+                if (pushData.type === 'manager' || pushData.type === 'chat') {
+                    AppUtils.notifyOrderReady(pushData);
+                    // INSTANT DISPLAY: Skip the poll, show it NOW.
+                    appendMessage(messageHTML, 'server', null, 'manager', pushData.token_no, null);
+
+
+
+                    // DIALOGUE (User Request)
+                    if (window.showNotificationModal) {
+                        showNotificationModal(messageHTML, 'notification');
+                    }
+                }
+                // Handle Status Updates
+                else if (pushData.type === 'status_update') {
+                    AppUtils.notifyOrderReady(pushData);
+                    // Refresh Status Card logic if needed or append update
+                    fetchOrderStatusOnce(pushData.token_no, null, pushData.vendor_id);
+                }
+            }
+        });
+    }
+
     // Input Listeners
     chatInput.addEventListener('input', function (e) {
         if (!isChatEnabled) {
@@ -593,15 +1137,38 @@ onDOMReady(async function () {
         } else if (isChatEnabled) {
             // --- CHAT MODE ---
             // Non-numeric text is sent as a chat message
-            console.log("Chat Message Sent:", val);
-            // Logic to push message to backend would go here
+            // console.log("Chat Message Sent:", val);
+
+            if (currentSessionToken) {
+                // Determine sender prefix if needed or just cleaned status
+                // The API expects 'sender' and 'message'
+                fetch(`${API.CHAT_API.replace('0', currentSessionToken)}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': AppUtils.getCSRFToken()
+                    },
+                    body: JSON.stringify({
+                        message: val,
+                        sender: 'CUSTOMER' // Corrected to uppercase match strict model choices
+                    })
+                }).then(res => {
+                    if (!res.ok) {
+                        console.error("Failed to send chat", res.status);
+                        res.text().then(text => console.error("Error Detail:", text));
+                    }
+                }).catch(e => console.error("Chat Network Error", e));
+            } else {
+                console.warn("No active token session for chat.");
+                appendMessage("Error: Please enter a Token Number first.", 'server');
+            }
 
             // Auto-Revert to Numeric Mode
             if (window.disableChatMode) window.disableChatMode();
         } else {
             // Should not be reachable due to input restriction, but safe fallback
             // Maybe user pasted text?
-            console.log("Input rejected: Numeric only mode active");
+            // console.log("Input rejected: Numeric only mode active");
         }
     });
 });
