@@ -27,3 +27,53 @@
         </div>
     </div>
 </div>
+
+<!-- Status Notification Modal -->
+<div class="modal fade" id="statusNotificationModal" tabindex="-1" aria-hidden="true" data-bs-backdrop="static"
+    data-bs-keyboard="false">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content"
+            style="border-radius: 20px; border: 3px solid #FDBF50; padding: 20px; background: linear-gradient(135deg, #fff 0%, #fffbf0 100%);">
+            <div class="modal-body text-center" style="padding: 30px 20px;">
+                <!-- Icon -->
+                <div style="font-size: 4rem; color: #FDBF50; margin-bottom: 20px;">
+                    <i class="fas fa-bell" style="animation: ring 1s ease-in-out infinite;"></i>
+                </div>
+
+                <!-- Title -->
+                <h4 style="font-weight: 700; color: #333; margin-bottom: 15px;">Order Status Update</h4>
+
+                <!-- Status Message -->
+                <div id="statusNotificationMessage"
+                    style="font-size: 1.5rem; font-weight: 600; color: #FDBF50; margin-bottom: 10px; text-transform: uppercase;">
+                    <!-- Status will be inserted here -->
+                </div>
+
+                <!-- Token Number -->
+                <div id="statusNotificationToken" style="font-size: 1.1rem; color: #666; margin-bottom: 25px;">
+                    <!-- Token number will be inserted here -->
+                </div>
+
+                <!-- OK Button -->
+                <button type="button" id="statusNotificationOkBtn" class="btn btn-warning rounded-pill px-5 py-3"
+                    style="background-color: #FDBF50; color: #333; font-weight: 700; font-size: 1.2rem; box-shadow: 0 4px 15px rgba(253, 191, 80, 0.4);">
+                    OK
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    @keyframes ring {
+
+        0%,
+        100% {
+            transform: rotate(-15deg);
+        }
+
+        50% {
+            transform: rotate(15deg);
+        }
+    }
+</style>

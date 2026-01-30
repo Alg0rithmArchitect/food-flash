@@ -17,7 +17,7 @@ class OrderSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Order
-        fields = ['id', 'token_number', 'status', 'is_called', 'created_at', 'messages']
+        fields = ['id', 'token_number', 'counter_number', 'status', 'is_called', 'created_at', 'messages']
 
 class PushSubscriptionSerializer(serializers.ModelSerializer):
     class Meta:

@@ -1,13 +1,13 @@
 /* === STATUS CARD IN CHAT === */
 .message-status-card {
-    background-color: #fff8e1;
-    /* Light cream background */
-    border-radius: 0 16px 16px 16px;
-    padding: 12px 16px;
-    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
-    margin-bottom: 5px;
+    background-color: transparent;
+    /* Removed double bubble */
+    /* border-radius: 0 16px 16px 16px; */
+    /* padding: 12px 16px; */
+    /* box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05); */
+    margin-bottom: 0;
     position: relative;
-    border-left: 4px solid #fdbf50;
+    /* border-left: 4px solid #fdbf50; */
     font-size: 0.95rem;
     color: #333;
 }

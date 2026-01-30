@@ -1,10 +1,184 @@
 // Consolidated scripts.js to avoid missing imports
 
+const debugLog = (msg, data = {}) => {
+    // Debug disabled
+};
+
+// --- STATUS NOTIFICATION WITH CONTINUOUS VIBRATION ---
+let vibrationInterval = null;
+
+window.startContinuousVibration = function () {
+    console.log('🔔 startContinuousVibration called');
+    console.log('📱 Vibration API supported:', 'vibrate' in navigator);
+
+    if (vibrationInterval) {
+        console.log('⚠️ Already vibrating, skipping');
+        return; // Already vibrating
+    }
+
+    // Vibrate immediately
+    if ('vibrate' in navigator) {
+        try {
+            const result = navigator.vibrate([1000, 300, 1000, 300, 1000]); // Strong pattern: 3 vibrations
+            console.log('✅ Initial vibration triggered, result:', result);
+        } catch (e) {
+            console.error('❌ Vibration error:', e);
+        }
+    } else {
+        console.warn('⚠️ Vibration API not supported on this device/browser');
+        console.log('💡 Tip: Vibration only works on mobile devices over HTTPS');
+
+        // Fallback: Play notification sound
+        playNotificationSound();
+    }
+
+    // Continue vibrating every 1.5 seconds (more frequent)
+    vibrationInterval = setInterval(() => {
+        if ('vibrate' in navigator) {
+            try {
+                navigator.vibrate([1000, 300, 1000, 300, 1000]); // Strong pattern
+                console.log('🔄 Vibration repeated');
+            } catch (e) {
+                console.error('❌ Vibration repeat error:', e);
+            }
+        } else {
+            // Play sound on repeat for non-vibration devices
+            playNotificationSound();
+        }
+    }, 1500); // Reduced from 2000ms to 1500ms for more frequent vibration
+
+    console.log('✅ Vibration interval started');
+};
+
+// Notification sound fallback
+function playNotificationSound() {
+    try {
+        // Create audio context for beep sound
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        const oscillator = audioContext.createOscillator();
+        const gainNode = audioContext.createGain();
+
+        oscillator.connect(gainNode);
+        gainNode.connect(audioContext.destination);
+
+        oscillator.frequency.value = 800; // Frequency in Hz
+        oscillator.type = 'sine';
+
+        gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5);
+
+        oscillator.start(audioContext.currentTime);
+        oscillator.stop(audioContext.currentTime + 0.5);
+
+        console.log('🔊 Notification sound played');
+    } catch (e) {
+        console.error('❌ Sound playback error:', e);
+    }
+}
+
+window.stopVibration = function () {
+    console.log('🛑 stopVibration called');
+
+    if (vibrationInterval) {
+        clearInterval(vibrationInterval);
+        vibrationInterval = null;
+        console.log('✅ Vibration interval cleared');
+    }
+
+    if ('vibrate' in navigator) {
+        navigator.vibrate(0); // Stop any ongoing vibration
+        console.log('✅ Vibration stopped');
+    }
+};
+
+window.showStatusNotification = function (status, tokenNumber) {
+    console.log('📢 showStatusNotification called', { status, tokenNumber });
+
+    // Update modal content
+    const messageEl = document.getElementById('statusNotificationMessage');
+    const tokenEl = document.getElementById('statusNotificationToken');
+
+    if (messageEl) messageEl.textContent = status;
+    if (tokenEl) tokenEl.textContent = `Token Number: ${tokenNumber}`;
+
+    console.log('🔔 About to start vibration...');
+
+    // Start continuous vibration
+    window.startContinuousVibration();
+
+    // Show modal
+    const modalEl = document.getElementById('statusNotificationModal');
+    if (modalEl) {
+        const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+        modal.show();
+        console.log('✅ Modal shown');
+    } else {
+        console.error('❌ Modal element not found!');
+    }
+};
+
+window.showManagerMessageNotification = function (message, tokenNumber) {
+    // Update modal content for manager message
+    const messageEl = document.getElementById('statusNotificationMessage');
+    const tokenEl = document.getElementById('statusNotificationToken');
+    const titleEl = document.querySelector('#statusNotificationModal h4');
+
+    if (messageEl) {
+        messageEl.textContent = message;
+        messageEl.style.textTransform = 'none'; // Don't uppercase manager messages
+        messageEl.style.fontSize = '1.2rem'; // Slightly smaller for longer messages
+    }
+    if (tokenEl) tokenEl.textContent = `Token Number: ${tokenNumber}`;
+    if (titleEl) titleEl.textContent = 'New Message from Manager';
+
+    // Start continuous vibration
+    window.startContinuousVibration();
+
+    // Show modal
+    const modalEl = document.getElementById('statusNotificationModal');
+    if (modalEl) {
+        const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+        modal.show();
+    }
+
+    // Reset title back to default when modal is hidden
+    const resetTitle = () => {
+        if (titleEl) titleEl.textContent = 'Order Status Update';
+        if (messageEl) {
+            messageEl.style.textTransform = 'uppercase';
+            messageEl.style.fontSize = '1.5rem';
+        }
+    };
+
+    if (modalEl) {
+        modalEl.addEventListener('hidden.bs.modal', resetTitle, { once: true });
+    }
+};
+
+// Setup OK button listener
+document.addEventListener('DOMContentLoaded', () => {
+    const okBtn = document.getElementById('statusNotificationOkBtn');
+    if (okBtn) {
+        okBtn.addEventListener('click', () => {
+            // Stop vibration
+            window.stopVibration();
+
+            // Hide modal
+            const modalEl = document.getElementById('statusNotificationModal');
+            if (modalEl) {
+                const modal = bootstrap.Modal.getInstance(modalEl);
+                if (modal) modal.hide();
+            }
+        });
+    }
+});
+
 // --- INTERNAL SERVICES STUBBED FOR COMPATIBILITY ---
 // (Since the original files were not provided, we inline simplified versions here)
 
 const API = {
     CHECK_STATUS: '/api/orders/track/',
+    CHAT_HISTORY: '/api/orders/chat/history/',
     SUBSCRIBE_PUSH: '/api/orders/push/subscribe/', // Updated from /food-flash/push/subscribe/ per earlier view
     LIST_OUTLETS: '/api/orders/outlets/',
     CHAT_API: '/api/orders/chat/0/', // Placeholder 0 to be replaced
@@ -113,6 +287,12 @@ function saveChatHistory(outletId, msg) {
     if (!exists) {
         window.chatHistory[outletId].push(msg);
     }
+
+    debugLog('SAVE CACHE', {
+        outlet: outletId,
+        total: window.chatHistory[outletId]?.length,
+        last: msg?.message
+    });
 }
 
 // --- DIALOGUE / MODAL FOR NOTIFICATIONS ---
@@ -356,41 +536,54 @@ function startChatPolling(token) {
     }, 4000); // 4 seconds interval
 }
 
-function appendStatusCard(data, vendorInfo) {
-    const container = document.getElementById('chat-container');
-    const div = document.createElement('div');
-    div.className = `message-row server`;
-
-    const logo = vendorInfo.logo || 'https://ui-avatars.com/api/?name=Food+Flash&background=333&color=fff';
-    const avatarHtml = `<img src="${logo}" class="server-logo">`;
-
-    // Mock Counter if missing
+function appendStatusCard(data, vendorInfo, shouldVibrate = true) {
+    // Construct the full HTML for the status card
     const counterNo = data.counter_number || Math.floor(Math.random() * 3) + 1;
 
+    // We construct the "inner" content that appendMessage will wrap (or render directly if type=status_card)
+    // Note: appendMessage handles the outer bubble structure.
+    // We already have the 'message-status-card' container in the HTML below.
     const cardHtml = `
     <div class="message-status-card">
         <div class="card-header">
            <span>${vendorInfo.name}</span>
-           <!-- SVG Icon to guarantee visibility -->
+           <!-- SVG Icon -->
            <svg onclick="window.enableChatMode('${data.token_number}')" class="reply-action-icon" xmlns="http://www.w3.org/2000/svg" height="24" viewBox="0 -960 960 960" width="24" fill="#2e7d32" style="cursor:pointer;">
                 <path d="M760-200v-160q0-50-35-85t-85-35H273l144 144-57 56-240-240 240-240 57 56-144 144h367q83 0 141.5 58.5T840-360v160h-80Z"/>
            </svg>
         </div>
-        <div class="status-row">
-           <strong>Status:</strong> <span class="status-pill">${data.status}</span>
+        <div class="status-card-inner">
+            <div class="status-row">
+               <strong>Status:</strong> <span class="status-pill">${data.status}</span>
+            </div>
+            <div class="details-row">
+                 <span class="detail-pill">Counter No: ${counterNo}</span>
+                 <span class="detail-pill">Token No: ${data.token_number}</span>
+            </div>
         </div>
-        <div class="details-row">
-             <span class="detail-pill">Counter No: ${counterNo}</span>
-             <span class="detail-pill">Token No: ${data.token_number}</span>
-        </div>
-        <div class="card-timestamp">${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
     </div>
     `;
 
-    div.innerHTML = `${avatarHtml}<div class="message-bubble server" style="background:transparent; padding:0; box-shadow:none; border:none;">${cardHtml}</div>`;
+    // Unique ID for status card to prevent duplicates? sc-{token}-{status}
+    // We want to update the card if status changes? Or just append new?
+    // Appending new is safer for history log.
+    const uniqueId = `sc-${data.token_number}-${data.status.replace(/\s/g, '')}`;
 
-    container.appendChild(div);
-    container.scrollTop = container.scrollHeight;
+    // Delegate to appendMessage which now handles saving and rendering
+    appendMessage(cardHtml, 'server', null, 'status_card', uniqueId, vendorInfo?.logo);
+
+    // Trigger status notification with continuous vibration (only if shouldVibrate is true)
+    if (shouldVibrate) {
+        console.log('🎯 appendStatusCard: About to call showStatusNotification', { status: data.status, token: data.token_number });
+
+        if (window.showStatusNotification) {
+            window.showStatusNotification(data.status, data.token_number);
+        } else {
+            console.error('❌ showStatusNotification function not found!');
+        }
+    } else {
+        console.log('🔇 appendStatusCard: Vibration skipped (initial load)');
+    }
 }
 
 // --- NEW CHAT LOGIC MERGED ---
@@ -414,7 +607,7 @@ async function handleOutletSelection(vendorId, vendor_logo, placeId) {
     localStorage.setItem("activeVendorRatingLink", placeId);
 }
 
-function appendMessage(text, sender, timestamp = null, type = null, token_no = null, passenger_name = null) {
+function appendMessage(text, sender, timestamp = null, type = null, token_no = null, passenger_name = null, skipCache = false) {
     // console.log("Booking ID from message:", token_no);
     const chatContainer = document.getElementById("chat-container");
 
@@ -429,17 +622,34 @@ function appendMessage(text, sender, timestamp = null, type = null, token_no = n
 
     const messageBubble = document.createElement('div');
     messageBubble.classList.add('message-bubble', sender);
+    if (token_no) {
+        messageBubble.id = token_no;
+        messageBubble.setAttribute('data-token-no', token_no); // extra safety
+    }
 
     // Safety check for window.BASE
     const base = window.BASE || '/';
 
     if (sender === 'server') {
+        let contentHtml = text;
+
+        // Handle Complex Status Card Rendering
+        if (type === 'status_card') {
+            // If text is object, it means we are restoring from cache where we saved the object
+            // But if we are calling from appendStatusCard helper, we might pass HTML or Object?
+            // Let's assume we pass the raw HTML string for simplicity in this flow,
+            // OR we handle the object. 
+            // Given constraint "appendMessage used to render", we should probably pass the HTML string.
+            contentHtml = text;
+        }
+
         messageBubble.innerHTML = `
             <div class="message-content">
+                ${type !== 'status_card' ? `
                 <button class="reply-button" title="Reply">
                     <i class="fa-solid fa-reply"></i>
-                </button>
-                ${text}
+                </button>` : ''}
+                ${contentHtml}
                 <span class="message-timestamp">
                     ${timeStamp} 
                 </span>
@@ -462,19 +672,33 @@ function appendMessage(text, sender, timestamp = null, type = null, token_no = n
     } else {
         messageBubble.innerHTML = `
             <div class="message-content">
-                <button class="reply-button" title="Reply">
-                    <i class="fa-solid fa-reply"></i>
-                </button>
+            <button class="reply-button" title="Reply">
+                <i class="fa-solid fa-reply"></i>
+            </button>
                 ${text}
-                <span class="message-timestamp timestamp-padded">
-                    ${timeStamp} 
-                </span>
-            </div>
-            `;
+    <span class="message-timestamp timestamp-padded">
+        ${timeStamp}
+    </span>
+            </div >
+        `;
     }
 
     if (token_no) {
         messageBubble.dataset.tokenNo = token_no;
+    }
+
+    if (sender === 'server') {
+        // passenger_name arg acts as logo_url for server messages
+        // Fallback to active vendor logo if not passed (e.g. from Push)
+        const logoUrl = passenger_name || localStorage.getItem("activeVendorLogo");
+
+        if (logoUrl) {
+            const logoImg = document.createElement('img');
+            logoImg.src = logoUrl;
+            logoImg.classList.add('server-logo');
+            logoImg.alt = 'Logo';
+            messageRow.appendChild(logoImg);
+        }
     }
 
     messageRow.appendChild(messageBubble);
@@ -537,6 +761,23 @@ function appendMessage(text, sender, timestamp = null, type = null, token_no = n
 
     chatContainer.appendChild(messageRow);
     chatContainer.scrollTop = chatContainer.scrollHeight;
+
+    // 🔐 Always cache messages (single source of truth)
+    // Runs for customer + manager + system
+    const effectiveOutletId = (typeof currentOutletId !== 'undefined' && currentOutletId) ? currentOutletId : window.currentOutletId;
+
+    if (effectiveOutletId && !skipCache) {
+        saveChatHistory(effectiveOutletId, {
+            id: token_no || `${sender}-${Date.now()}`,
+            sender: sender === 'user' ? 'CUSTOMER' : 'MANAGER',
+            message: text,
+            timestamp: timeStamp || new Date().toISOString(),
+            type: type || null
+        });
+    }
+
+    if (AppUtils.adjustChatResponsePadding) AppUtils.adjustChatResponsePadding();
+
     if (AppUtils.adjustChatResponsePadding) AppUtils.adjustChatResponsePadding();
 }
 
@@ -613,6 +854,10 @@ onDOMReady(async function () {
         init: async function () {
             // Overwrite global service with closure-aware implementation
             ChatRestoreService.restore = async (vendorId) => {
+                debugLog('RESTORE START', {
+                    outlet: vendorId,
+                    cached: window.chatHistory[vendorId]?.length || 0
+                });
                 const container = document.getElementById('chat-container');
                 if (container) container.innerHTML = '';
 
@@ -627,9 +872,9 @@ onDOMReady(async function () {
                         const logo = vData.logo;
 
                         if (side === 'server') {
-                            appendMessage(msg.message, 'server', null, null, `msg-${msg.id}`, logo);
+                            appendMessage(msg.message, 'server', null, null, `msg-${msg.id}`, logo, true);
                         } else {
-                            appendMessage(msg.message, 'user', null, null, `msg-${msg.id}`, logo);
+                            appendMessage(msg.message, 'user', null, null, `msg-${msg.id}`, logo, true);
                         }
                     });
                 }
@@ -637,8 +882,80 @@ onDOMReady(async function () {
                 const savedToken = localStorage.getItem(`session_token_${vendorId}`);
                 if (savedToken) {
                     currentSessionToken = savedToken;
-                    const result = await fetchOrderStatusOnce(savedToken, null, vendorId);
-                    if (result) return true;
+
+                    try {
+                        const params = new URLSearchParams({
+                            outlet_id: vendorId,
+                            token: savedToken
+                        });
+
+                        const res = await fetch(`${API.CHAT_HISTORY}?${params.toString()} `);
+                        if (res.ok) {
+                            const messages = await res.json();
+
+                            // Iterate and Append, skipping duplicates
+                            messages.forEach(msg => {
+                                // saveChatHistory(vendorId, msg); // REDUNDANT: handled in appendMessage
+
+                                const side = (msg.sender === 'CUSTOMER') ? 'user' : 'server';
+
+                                // Fetch Logo
+                                const vData = VendorUIService.vendors.find(v => v.id === vendorId) || {};
+                                const logo = vData.logo;
+
+                                if (!document.getElementById(`msg-${msg.id}`)) {
+                                    debugLog('APPEND', {
+                                        outlet: vendorId,
+                                        id: msg.id,
+                                        text: msg.message
+                                    });
+                                    appendMessage(msg.message, side, null, null, `msg-${msg.id}`, logo);
+                                } else {
+                                    debugLog('SKIP DUPLICATE', {
+                                        id: msg.id
+                                    });
+                                }
+                            });
+                            const cachedMsgs = window.chatHistory[vendorId] || [];
+
+                            const domMsgs = Array.from(
+                                document.querySelectorAll('#chat-container .message-bubble')
+                            ).map((el, index) => ({
+                                index,
+                                text: el.innerText.trim(),
+                                token: el.dataset.tokenNo || null
+                            }));
+
+                            console.group(`[CHAT DEBUG]Outlet: ${vendorId} `);
+
+                            console.log('📦 Cached messages (actual):', cachedMsgs.length);
+                            console.table(
+                                cachedMsgs.map((m, i) => ({
+                                    index: i,
+                                    id: m.id || null,
+                                    sender: m.sender,
+                                    message: m.message,
+                                    token: m.token_no || null,
+                                    time: m.timestamp || null
+                                }))
+                            );
+
+                            console.log('🖥 Rendered messages (DOM):', domMsgs.length);
+                            console.table(domMsgs);
+
+                            console.groupEnd();
+                            return true; // Restoration successful
+                        }
+                    } catch (e) {
+                        console.error("History fetch failed", e);
+                    }
+
+                    // Fallback: still try fetchOrderStatusOnce for status card if history failed? 
+                    // Or minimal refresh.
+                    // Actually, let's keep fetchOrderStatusOnce for the status card itself!
+                    // History API only returns messages. We need the status card too.
+                    await fetchOrderStatusOnce(savedToken, null, vendorId);
+                    return true;
                 }
                 return false;
             };
@@ -706,11 +1023,16 @@ onDOMReady(async function () {
             document.querySelectorAll('.vendor-logo-wrapper').forEach(el => el.classList.remove('active'));
             element.classList.add('active');
 
+            window.currentOutletId = vendorData.id; // Global for appendMessage cache
             await AppUtils.setCurrentVendors(vendorData.id);
             const restored = await ChatRestoreService.restore(vendorData.id);
 
-            // 3. Trigger Welcome Message ONLY if no session restored
-            if (!restored) {
+            // 3. Trigger Welcome Message ONLY if chat is effectively empty
+            // This covers: New Session, Failed Restore, or Empty History
+            const chatContainer = document.getElementById('chat-container');
+            const isEmpty = !chatContainer || chatContainer.querySelectorAll('.message-bubble').length === 0;
+
+            if (isEmpty) {
                 appendMessage(`Hi, Good Day! Welcome to ${vendorData.name}.`, 'server', null, null, null, vendorData.logo);
                 appendMessage("Kindly enter the Bill Number.", 'server', null, null, null, vendorData.logo);
             }
@@ -734,6 +1056,18 @@ onDOMReady(async function () {
                 if (e.target.closest('#add-outlet-btn')) {
                     e.preventDefault();
                     e.stopPropagation();
+
+                    // Pre-select currently displayed outlets
+                    const activeWrappers = document.querySelectorAll('.vendor-logo-wrapper');
+                    activeWrappers.forEach(wrapper => {
+                        const outletId = parseInt(wrapper.getAttribute('data-outlet-id'));
+                        if (outletId) {
+                            this.selectedOutlets.add(outletId);
+                        }
+                    });
+
+                    // Re-render modal with updated selections
+                    this.render();
 
                     const modalEl = document.getElementById('addOutletModal');
                     if (modalEl) {
@@ -976,8 +1310,8 @@ onDOMReady(async function () {
                 // e.g. "Your Order #105 is Preparing"
                 const vendorInfo = VendorUIService.getVendor(outletId) || { logo: 'https://ui-avatars.com/api/?name=Food+Flash&background=333&color=fff', name: 'Food Flash' };
 
-                // 1. Render Status Card
-                appendStatusCard(data, vendorInfo);
+                // 1. Render Status Card (no vibration on initial load)
+                appendStatusCard(data, vendorInfo, false);
 
                 // 2. Render Chat History (New Feature)
                 if (data.messages && Array.isArray(data.messages)) {
@@ -992,7 +1326,7 @@ onDOMReady(async function () {
                     // quick hack: check if message ID exists?
                     data.messages.forEach(msg => {
                         // 1. Save to Client Cache
-                        saveChatHistory(outletId, msg);
+                        // saveChatHistory(outletId, msg); // REDUNDANT: Handled in appendMessage
 
                         // 2. Render if not present
                         // Unique ID check
@@ -1002,6 +1336,11 @@ onDOMReady(async function () {
                             if (side === 'server') {
                                 // Manager Message
                                 appendMessage(msg.message, 'server', null, null, `msg-${msg.id}`, vendorInfo.logo);
+
+                                // Show notification modal with vibration for manager messages
+                                if (window.showManagerMessageNotification) {
+                                    window.showManagerMessageNotification(msg.message, token);
+                                }
                             } else {
                                 // Customer Message (We likely already showed it locally, but good to sync)
                                 // To avoid duplicates of local echo, we might skip or check text.
@@ -1036,7 +1375,8 @@ onDOMReady(async function () {
     // --- MAIN LOGIC ---
 
     // 1. Always Render Outlets (Fix for missing icons)
-    VendorUIService.init();
+    // 1. Always Render Outlets (Fix for missing icons)
+    await VendorUIService.init();
     AddOutletService.init();
 
     // 2. Parse URL Params
@@ -1044,29 +1384,36 @@ onDOMReady(async function () {
     const tokenFromQR = urlParams.get('token_no') || urlParams.get('token');
     const outletFromQR = urlParams.get('outlet_id');
 
+    // 🚨 FIX: Initialize Global State Immediately
+    if (outletFromQR) {
+        window.currentOutletId = outletFromQR;
+        localStorage.setItem('activeVendor', outletFromQR);
+    }
+
     let currentSessionToken = tokenFromQR;
 
     // 3. Handle Auto-Selection (triggers Welcome Message)
     if (outletFromQR) {
-        setTimeout(() => {
+        const vendor = VendorUIService.getVendor(outletFromQR);
+        if (vendor) {
             const wrapper = document.querySelector(`.vendor-logo-wrapper[data-outlet-id="${outletFromQR}"]`);
             if (wrapper) {
-                wrapper.click(); // Triggers handleOutletSelection -> Welcome Message
+                // Determine if we should wait for this before token logic
+                // Yes, to ensure "Welcome" appears BEFORE "Order Status"
+                await VendorUIService.handleOutletSelection(wrapper, vendor);
             }
-        }, 100);
+        }
     }
 
     // 4. Handle Token Processing (triggers Order Status)
     if (tokenFromQR) {
-        // Wait slightly for the Welcome Message to appear first (if auto-selected)
-        setTimeout(() => {
-            appendMessage(tokenFromQR, 'user');
+        appendMessage(tokenFromQR, 'user');
 
-            PermissionService.requestPermissions().then(granted => {
-                if (granted) fetchOrderStatusOnce(tokenFromQR, null, outletFromQR);
-            });
-        }, 800);
+        PermissionService.requestPermissions().then(granted => {
+            if (granted) fetchOrderStatusOnce(tokenFromQR, null, outletFromQR);
+        });
     }
+
 
     // Input Listeners
     // --- PUSH LISTENER FOR INSTANT CHAT ---

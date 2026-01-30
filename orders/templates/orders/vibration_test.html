@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vibration Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 50px auto;
+            padding: 20px;
+            text-align: center;
+        }
+
+        button {
+            background: #FDBF50;
+            color: #333;
+            border: none;
+            padding: 20px 40px;
+            font-size: 1.2rem;
+            border-radius: 10px;
+            cursor: pointer;
+            margin: 10px;
+            font-weight: bold;
+        }
+
+        button:active {
+            transform: scale(0.95);
+        }
+
+        #log {
+            margin-top: 30px;
+            padding: 20px;
+            background: #f5f5f5;
+            border-radius: 10px;
+            text-align: left;
+            font-family: monospace;
+            font-size: 0.9rem;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .info {
+            background: #e3f2fd;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>📱 Vibration API Test</h1>
+
+    <div class="info">
+        <strong>Important:</strong> Vibration only works on:
+        <ul style="text-align: left;">
+            <li>Mobile devices (Android/iOS)</li>
+            <li>HTTPS connections (or localhost)</li>
+            <li>After user interaction (button click)</li>
+        </ul>
+    </div>
+
+    <button onclick="testSingleVibration()">Test Single Vibration</button>
+    <button onclick="testPatternVibration()">Test Pattern Vibration</button>
+    <button onclick="testContinuousVibration()">Start Continuous Vibration</button>
+    <button onclick="stopVibration()" style="background: #f44336; color: white;">Stop Vibration</button>
+
+    <div id="log"></div>
+
+    <script>
+        let vibrationInterval = null;
+
+        function log(message) {
+            const logDiv = document.getElementById('log');
+            const timestamp = new Date().toLocaleTimeString();
+            logDiv.innerHTML += `[${timestamp}] ${message}<br>`;
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+
+        // Check support on load
+        window.addEventListener('load', () => {
+            log('🔍 Checking vibration support...');
+            log('📱 Vibration API supported: ' + ('vibrate' in navigator));
+            log('🌐 Protocol: ' + window.location.protocol);
+            log('📍 User Agent: ' + navigator.userAgent.substring(0, 50) + '...');
+
+            if (!('vibrate' in navigator)) {
+                log('❌ Vibration API not supported on this device/browser');
+                log('💡 Try opening this page on a mobile device over HTTPS');
+            } else {
+                log('✅ Vibration API is available!');
+                log('👆 Click a button to test vibration');
+            }
+        });
+
+        function testSingleVibration() {
+            log('🔔 Testing single vibration (500ms)...');
+            if ('vibrate' in navigator) {
+                const result = navigator.vibrate(500);
+                log('Result: ' + result);
+            } else {
+                log('❌ Vibration not supported');
+            }
+        }
+
+        function testPatternVibration() {
+            log('🔔 Testing pattern vibration [500, 200, 500]...');
+            if ('vibrate' in navigator) {
+                const result = navigator.vibrate([500, 200, 500]);
+                log('Result: ' + result);
+            } else {
+                log('❌ Vibration not supported');
+            }
+        }
+
+        function testContinuousVibration() {
+            log('🔔 Starting continuous vibration (every 2 seconds)...');
+
+            if (vibrationInterval) {
+                log('⚠️ Already vibrating');
+                return;
+            }
+
+            if ('vibrate' in navigator) {
+                // Vibrate immediately
+                navigator.vibrate([500, 200, 500]);
+                log('✅ Initial vibration triggered');
+
+                // Continue every 2 seconds
+                vibrationInterval = setInterval(() => {
+                    navigator.vibrate([500, 200, 500]);
+                    log('🔄 Vibration repeated');
+                }, 2000);
+
+                log('✅ Continuous vibration started');
+            } else {
+                log('❌ Vibration not supported');
+            }
+        }
+
+        function stopVibration() {
+            log('🛑 Stopping vibration...');
+
+            if (vibrationInterval) {
+                clearInterval(vibrationInterval);
+                vibrationInterval = null;
+                log('✅ Interval cleared');
+            }
+
+            if ('vibrate' in navigator) {
+                navigator.vibrate(0);
+                log('✅ Vibration stopped');
+            }
+        }
+    </script>
+</body>
+
+</html>

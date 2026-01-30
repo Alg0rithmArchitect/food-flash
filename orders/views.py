@@ -3,16 +3,16 @@ from django.views.decorators.csrf import csrf_exempt
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework import status
-from django.shortcuts import get_object_or_404
-from .models import Order, PushSubscription
-from .models import Order, PushSubscription
-from .serializers import OrderSerializer, PushSubscriptionSerializer, OutletSerializer
+from django.shortcuts import get_object_or_404, render
+from .models import Order, PushSubscription, Outlet, ChatMessage
+from .serializers import OrderSerializer, PushSubscriptionSerializer, OutletSerializer, ChatMessageSerializer
 from pywebpush import webpush, WebPushException, Vapid
 import os
 import json
 from django.conf import settings
 from pathlib import Path
-from .models import Outlet
+from .utils import get_vendor_business_day_range
+from django.http import JsonResponse
 
 @api_view(['GET'])
 @authentication_classes([]) # Public access needed for landing page
@@ -36,16 +36,42 @@ def track_order(request):
     try:
         order = None
         if outlet_id:
-            order = Order.objects.filter(token_number=token, outlet_id=outlet_id).first()
+            # Get outlet for business day calculation
+            try:
+                outlet = Outlet.objects.get(id=outlet_id)
+                # Get business day range
+                start_utc, end_utc = get_vendor_business_day_range(outlet)
+                
+                # Filter orders by business day range
+                order = Order.objects.filter(
+                    token_number=token,
+                    outlet_id=outlet_id,
+                    created_at__gte=start_utc,
+                    created_at__lt=end_utc
+                ).order_by('-created_at').first()
+                
+                # If no order found in current business day, create new one
+                if not order:
+                    # Reset counters if this is the first order of a new business day
+                    from .utils import reset_counters_if_new_business_day, assign_counter_number
+                    reset_counters_if_new_business_day(outlet)
+                    
+                    order = Order.objects.create(
+                        token_number=token,
+                        outlet_id=outlet_id,
+                        status='PREPARING'
+                    )
+                    
+                    # Assign auto-incremented counter number
+                    assign_counter_number(outlet, order)
+            except Outlet.DoesNotExist:
+                return Response({"detail": "Outlet not found."}, status=status.HTTP_404_NOT_FOUND)
         else:
-            # Only fallback if NO outlet was specified at all
+            # No outlet specified: find latest order with this token across all outlets
             order = Order.objects.filter(token_number=token).order_by('-created_at').first()
-            
+        
         if not order:
-            return Response(
-                {"detail": "Order not found."}, 
-                status=status.HTTP_404_NOT_FOUND
-            )
+            return Response({"detail": "Order not found."}, status=status.HTTP_404_NOT_FOUND)
             
         serializer = OrderSerializer(order)
         return Response(serializer.data)
@@ -489,7 +515,22 @@ class ChatMessageListCreate(generics.ListCreateAPIView):
 
     def get_queryset(self):
         token = self.kwargs['token']
-        return ChatMessage.objects.filter(order__token_number=token)
+        qs = ChatMessage.objects.filter(order__token_number=token)
+        
+        # Filter by business day if order has an outlet
+        # Get the first order to determine outlet (they should all have same outlet for a token)
+        first_order = Order.objects.filter(token_number=token).first()
+        if first_order and first_order.outlet:
+            try:
+                start_utc, end_utc = get_vendor_business_day_range(first_order.outlet)
+                qs = qs.filter(
+                    order__created_at__gte=start_utc,
+                    order__created_at__lt=end_utc
+                )
+            except:
+                pass  # If business day calculation fails, return all messages
+        
+        return qs
 
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
@@ -564,3 +605,36 @@ class ManagerDashboardView(TemplateView):
 
 
 
+
+@api_view(['GET'])
+@authentication_classes([]) # Or IsAuthenticated depending on requirements, kept open for now per track_order pattern
+def get_chat_history(request):
+    outlet_id = request.query_params.get('outlet_id')
+    token = request.query_params.get('token')
+
+    if not outlet_id:
+        return Response({"detail": "Outlet ID required"}, status=status.HTTP_400_BAD_REQUEST)
+
+    # Filter messages via Order relation
+    qs = ChatMessage.objects.filter(order__outlet_id=outlet_id)
+
+    if token:
+        qs = qs.filter(order__token_number=token)
+        
+        # Apply business day filtering
+        try:
+            outlet = Outlet.objects.get(id=outlet_id)
+            start_utc, end_utc = get_vendor_business_day_range(outlet)
+            
+            # Filter messages to current business day only
+            qs = qs.filter(
+                order__created_at__gte=start_utc,
+                order__created_at__lt=end_utc
+            )
+        except Outlet.DoesNotExist:
+            pass  # If outlet not found, return empty queryset
+
+    qs = qs.order_by('timestamp')  # Correct field name
+
+    serializer = ChatMessageSerializer(qs, many=True)
+    return Response(serializer.data)

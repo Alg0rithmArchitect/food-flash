@@ -10,6 +10,28 @@ class Outlet(models.Model):
     def __str__(self):
         return self.name
 
+class VendorConfig(models.Model):
+    """Configuration for vendor business day logic"""
+    outlet = models.OneToOneField(Outlet, on_delete=models.CASCADE, related_name='config')
+    business_day_start_hour = models.TimeField(
+        default='04:00:00',
+        help_text="Time when business day starts (e.g., 04:00 for 4 AM)"
+    )
+    timezone = models.CharField(
+        max_length=50,
+        default='Asia/Kolkata',
+        help_text="Vendor's timezone (e.g., Asia/Kolkata, America/New_York)"
+    )
+    continuous_booking_counter = models.IntegerField(
+        default=0,
+        help_text="Counter for booking numbers, resets at start of each business day"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"Config for {self.outlet.name}"
+
 class OutletManager(models.Model):
     user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     outlet = models.ForeignKey(Outlet, on_delete=models.CASCADE)
@@ -27,6 +49,11 @@ class Order(models.Model):
 
     outlet = models.ForeignKey(Outlet, on_delete=models.CASCADE, null=True, blank=True, related_name='orders')
     token_number = models.PositiveIntegerField()
+    counter_number = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        help_text="Auto-incremented counter number, resets daily per business day"
+    )
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PREPARING')
     is_called = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)

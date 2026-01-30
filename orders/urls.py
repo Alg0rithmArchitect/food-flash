@@ -10,6 +10,7 @@ urlpatterns = [
     path('track/', views.track_order, name='track_order'),
     path('track-page/', views.track_order_page, name='track_order_page'),
     path('chat/<int:token>/', views.ChatMessageListCreate.as_view(), name='chat_api'),
+    path('chat/history/', views.get_chat_history, name='get_chat_history'),
     path('manager/chat/', views.ManagerDashboardView.as_view(), name='manager_dashboard'),
     path('outlets/', views.get_outlets, name='list_outlets'),
 ]
