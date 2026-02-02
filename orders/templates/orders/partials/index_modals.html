@@ -7,7 +7,8 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
-                <div id="outlet-selection-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                <div id="outlet-selection-grid"
+                    style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; max-height: 400px; overflow-y: auto; padding-right: 5px;">
                     <!-- Javascript will populate this -->
                 </div>
             </div>
@@ -75,5 +76,29 @@
         50% {
             transform: rotate(15deg);
         }
+    }
+
+    /* Custom scrollbar for outlet selection grid */
+    #outlet-selection-grid::-webkit-scrollbar {
+        width: 6px;
+    }
+
+    #outlet-selection-grid::-webkit-scrollbar-track {
+        background: #f1f1f1;
+        border-radius: 10px;
+    }
+
+    #outlet-selection-grid::-webkit-scrollbar-thumb {
+        background: #FDBF50;
+        border-radius: 10px;
+    }
+
+    #outlet-selection-grid::-webkit-scrollbar-thumb:hover {
+        background: #e5ab3f;
+    }
+
+    /* Smooth scrolling */
+    #outlet-selection-grid {
+        scroll-behavior: smooth;
     }
 </style>
